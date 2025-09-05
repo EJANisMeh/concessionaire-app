@@ -1,58 +1,77 @@
 import { useState } from 'react'
-import { auth, db } from '../firebase'
-import { signInWithEmailAndPassword, signOut, User } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../firebase'
+import { doc, getDocs, collection, query, where } from 'firebase/firestore'
 
 interface UserProfile {
-	isNew: boolean
-	name: string
-	// Add other fields as needed
+	email: string
+	passwordHash: string
+	newLogin: boolean
 }
 
+interface LoginResult {
+	success: boolean
+	error?: string
+	user?: UserProfile
+}
+
+const debugBool: boolean = true
+
 export function useAuth() {
-	const [user, setUser] = useState<User | null>(null)
-	const [userData, setUserData] = useState<UserProfile | null>(null)
-	const [loading, setLoading] = useState(false)
+	const [user, setUser] = useState<UserProfile | null>(null)
+	const [error, setError] = useState<string | null>(null)
 
-	/**
-	 * Login using Firebase Authentication and fetch user profile from Firestore.
-	 * @param email User's email
-	 * @param password User's password
-	 */
-	const login = async (email: string, password: string) => {
-		setLoading(true)
+	// Login using Firestore users collection. Returns true if successful, false if failed.
+	const login = async (
+		email: string,
+		password: string
+	): Promise<LoginResult> => {
+		debugBool && console.log('Debug: Attempting login for:', email)
+		setUser(null)
+		setError(null)
 		try {
-			// Authenticate user with Firebase Auth
-			const userCredential = await signInWithEmailAndPassword(
-				auth,
-				email,
-				password
-			)
-			setUser(userCredential.user)
-
-			// Fetch user profile from Firestore using UID
-			const userId = userCredential.user.uid
-			const userDocRef = doc(db, 'users', userId)
-			const userDocSnap = await getDoc(userDocRef)
-			if (userDocSnap.exists()) {
-				setUserData(userDocSnap.data() as UserProfile)
-			} else {
-				setUserData(null) // No profile found
+			// Query users collection for matching email
+			debugBool && console.log('Querying users collection for email:', email)
+			const usersRef = collection(db, 'users')
+			const q = query(usersRef, where('email', '==', email))
+			const querySnapshot = await getDocs(q)
+			if (querySnapshot.empty) {
+				debugBool && console.log('Debug: User not found')
+				setError('User not found')
+				return { success: false, error: 'User not found' }
 			}
-		} finally {
-			setLoading(false)
+
+			// Assume only one user per email
+			debugBool && console.log('Debug: User found, verifying password')
+			const userDoc = querySnapshot.docs[0]
+			const userData = userDoc.data() as UserProfile
+
+			// passwordHash should be hashed and compared securely in a real app
+			// Here we just do a plain text comparison for simplicity
+			if (userData.passwordHash !== password) {
+				debugBool && console.log('Debug: Incorrect password')
+				setError('Incorrect password')
+				return { success: false, error: 'Incorrect password' }
+			}
+
+			// Successful login
+			debugBool &&
+				console.log('Debug: Login successful with user data:', userData)
+			setUser(userData)
+			return { success: true, user: userData }
+			
+		} catch (err: any) {
+			// On error, clear user and set error message
+			setUser(null)
+			setError(err.message)
+			return { success: false, error: err.message }
 		}
 	}
 
-	/**
-	 * Logout user from Firebase Authentication and clear local state.
-	 */
+	// Logout user by clearing local state.
 	const logout = async () => {
-		await signOut(auth)
 		setUser(null)
-		setUserData(null)
 	}
 
 	// Return all auth state and functions for use in your app
-	return { user, userData, loading, login, logout }
+	return { user, login, logout, error }
 }

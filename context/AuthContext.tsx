@@ -6,6 +6,7 @@ interface UserProfile {
 	email: string
 	passwordHash: string
 	newLogin: boolean
+	emailVerified: boolean
 }
 
 interface LoginResult {
@@ -54,11 +55,9 @@ export function useAuth() {
 			}
 
 			// Successful login
-			debugBool &&
-				console.log('Debug: Login successful with user data:', userData)
+			debugBool && console.log('Debug: Login successful')
 			setUser(userData)
 			return { success: true, user: userData }
-			
 		} catch (err: any) {
 			// On error, clear user and set error message
 			setUser(null)

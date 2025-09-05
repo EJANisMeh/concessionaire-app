@@ -1,13 +1,16 @@
 import React from 'react'
 import { StatusBar } from 'expo-status-bar'
-import LoginScreen from '../screens/Auth/LoginScreen'
 import { GlobalProvider } from '../context/GlobalContext'
+import { NavigationContainer } from '@react-navigation/native'
+import AppStack from '../navigation/AppStack'
 
 export default function RootLayout() {
 	return (
 		<GlobalProvider>
-			<LoginScreen />
 			<StatusBar style="auto" />
+			<NavigationContainer>
+				<AppStack />
+			</NavigationContainer>
 		</GlobalProvider>
 	)
 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { View, Text, TextInput, Button, Alert } from 'react-native'
 import { useGlobalContext } from '../../context/GlobalContext'
 
-const LoginScreen = ({ navigation }: any) => {
+const LoginScreen: React.FC = ({ navigation }: any) => {
 	const { auth } = useGlobalContext()
 	const [email, setEmail] = useState<string>('')
 	const [password, setPassword] = useState<string>('')
@@ -18,14 +18,13 @@ const LoginScreen = ({ navigation }: any) => {
 			return
 		}
 
-		if (result.user.newLogin) {
-			Alert.alert('First Time Login', 'Please change your password.')
-			// navigation.navigate('ChangePassword');
+		if (result.user.newLogin || !result.user.emailVerified) {
+			Alert.alert('Proceeding to email verification.')
+			navigation.navigate('EmailVerificationScreen')
 		} else {
 			Alert.alert('Regular Login', 'Proceeding to home screen.')
-			// navigation.navigate('Home');
+			navigation.navigate('Home')
 		}
-		// navigation.navigate('Home');
 		setLoading(false)
 	}
 

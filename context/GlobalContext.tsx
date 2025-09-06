@@ -1,30 +1,25 @@
 import React, { createContext, useContext, ReactNode } from 'react'
-import { useAuth } from './AuthContext'
+import { Auth } from '../backend/AuthBackend'
+// import { useMenu } from './MenuContext' // For future modules
 
-interface GlobalContextType {
-	auth: ReturnType<typeof useAuth>
-	// menu?: ReturnType<typeof useMenuContext>;
-	// orders?: ReturnType<typeof useOrdersContext>;
-}
-
-const GlobalContext = createContext<GlobalContextType | undefined>(undefined)
-
-export const useGlobalContext = () => {
-	const context = useContext(GlobalContext)
-	if (!context)
-		throw new Error('useGlobalContext must be used within GlobalProvider')
-	return context
-}
+const GlobalContext = createContext<any>(null)
 
 export const GlobalProvider = ({ children }: { children: ReactNode }) => {
-	const auth = useAuth()
-	// In the future, add: const menu = useMenuContext(); const orders = useOrdersContext(); etc.
-
-	const contexts = {
-		auth,
-		// In the future, add: menu, orders, etc.
+	// Instantiate all modules here
+	const Contexts = {
+		Auth: Auth(),
+		// menu: useMenu(), // Add more as needed
+		// profile: useProfile(),
+		// orders: useOrders(),
 	}
+
 	return (
-		<GlobalContext.Provider value={contexts}>{children}</GlobalContext.Provider>
+		<GlobalContext.Provider value={Contexts}>{children}</GlobalContext.Provider>
 	)
 }
+
+// Custom hooks for each module
+export const useAuthBackend = () => useContext(GlobalContext).Auth
+// export const useMenuBackend = () => useContext(GlobalContext).menu
+// export const useProfileBackend = () => useContext(GlobalContext).profile
+// export const useOrdersBackend = () => useContext(GlobalContext).orders

@@ -1,3 +1,5 @@
 concessionaire app
 To add:
-password hash
+password hash encryption,
+email verification,
+password change validation,

@@ -27,12 +27,14 @@ const ChangePasswordScreen = ({ navigation, route }: any) => {
 			return
 		}
 		const result = await changePassword(user.email, newPassword)
-		if (result.success) {
-			Alert.alert('Success', 'Password changed successfully!')
-			navigation.navigate('Login')
-		} else {
+		if (!result.success) {
 			Alert.alert('Error:', result.error || 'Password change failed')
+			setLoading(false)
+			return
 		}
+
+		Alert.alert('Success', 'Password changed successfully!')
+		navigation.navigate('Login')
 		setLoading(false)
 	}
 

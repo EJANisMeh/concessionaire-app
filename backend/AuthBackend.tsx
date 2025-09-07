@@ -39,9 +39,12 @@ interface AuthContextType {
 	changePassword: (
 		email: string,
 		newPassword: string
-	) => Promise<{ success: boolean; error?: string }>
+	) => Promise<{ success: boolean; error?: string; user?: UserProfile }>
 	isLoggedIn: boolean
 	setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>
+	resetPasswordRequest: (
+		email: string
+	) => Promise<{ success: boolean; error?: string; user?: UserProfile }>
 }
 
 export const Auth = (): AuthContextType => {
@@ -73,10 +76,7 @@ export const Auth = (): AuthContextType => {
 			return { error: err.message || 'Unknown error' }
 		}
 	}
-	const login = async (
-		email: string,
-		password: string
-	): Promise<LoginResult> => {
+	const login: AuthContextType['login'] = async (email, password) => {
 		debugBool && console.log('Login Debug: Attempting login for:', email)
 		setUser(null)
 
@@ -129,22 +129,22 @@ export const Auth = (): AuthContextType => {
 	}
 
 	// Logout user by clearing local state.
-	const logout = async () => {
+	const logout: AuthContextType['logout'] = async () => {
 		setIsLoggedIn(false)
 		setUser(null)
 	}
 
 	// Verify email code (hardcoded for prototype)
-	const verifyEmailCode = async (
-		inputCode: string,
-		email: string
-	): Promise<{ success: boolean; error?: string }> => {
+	const verifyEmailCode: AuthContextType['verifyEmailCode'] = async (
+		inputCode,
+		email
+	) => {
 		// Check code against hardcoded value
 		if (inputCode !== hardCodedEmailCode) {
 			return { success: false, error: 'Invalid code' }
 		}
 
-		debugBool && console.log('Debug: Email code verified')
+		debugBool && console.log('Verify Email Debug: Email code verified')
 
 		// Update user's emailVerified to true in Firestore
 		try {
@@ -157,27 +157,33 @@ export const Auth = (): AuthContextType => {
 			await updateDoc(userDocRef, { emailVerified: true })
 
 			// Refresh local user state from updated document
-			debugBool && console.log('Debug: Fetching updated user document')
+			debugBool &&
+				console.log('Verify Email Debug: Fetching updated user document')
 			const newUserDoc = (await getUserDocViaEmail(email)).userDoc
 			if (!newUserDoc) {
 				return { success: false, error: 'User somehow not found' }
 			}
 			const newUserData = newUserDoc.data() as UserProfile
 
-			debugBool && console.log('Debug: User record updated successfully')
+			debugBool &&
+				console.log('Verify Email Debug: User record updated successfully')
 			setUser(newUserData)
-			return { success: true }
+			return { success: true, user: newUserData }
 		} catch (err: any) {
-			debugBool && console.log('Debug: Email verification error:', err.message)
+			debugBool &&
+				console.log(
+					'Verify Email Debug: Email verification error:',
+					err.message
+				)
 			return { success: false, error: 'Email verification failed' }
 		}
 	}
 
 	// Change password and set newLogin to false
-	const changePassword = async (
-		email: string,
-		newPassword: string
-	): Promise<{ success: boolean; error?: string }> => {
+	const changePassword: AuthContextType['changePassword'] = async (
+		email,
+		newPassword
+	) => {
 		try {
 			const userDocResult = await getUserDocViaEmail(email)
 			if (userDocResult.error || !userDocResult.userDoc) {
@@ -197,9 +203,51 @@ export const Auth = (): AuthContextType => {
 			const updatedUserData = updatedUserDoc.data() as UserProfile
 			setUser(updatedUserData)
 
-			return { success: true }
+			return { success: true, user: updatedUserData }
 		} catch (err: any) {
 			return { success: false, error: err.message || 'Password change failed' }
+		}
+	}
+
+	const resetPasswordRequest: AuthContextType['resetPasswordRequest'] = async (
+		email
+	) => {
+		// Simulate sending a password reset email
+		debugBool &&
+			console.log(
+				'Reset Password Debug: Sending password reset email to:',
+				email
+			)
+		try {
+			const userDocResult = await getUserDocViaEmail(email)
+			if (userDocResult.error || !userDocResult.userDoc) {
+				return { success: false, error: 'User not found' }
+			}
+
+			const userData = userDocResult.userDoc.data() as UserProfile
+			setUser(userData)
+
+			// If email not verified, return error and user data
+			if (!userData.emailVerified) {
+				return {
+					success: false,
+					error: 'Email found but not yet verified',
+					user: userData,
+				}
+			}
+
+			// In a real app, send an email with a reset link or code here
+			debugBool &&
+				console.log(
+					'Reset Password Debug: Password reset email sent to:',
+					email
+				)
+
+			return { success: true }
+		} catch (err: any) {
+			debugBool &&
+				console.log('Reset Password Debug: Password reset error:', err.message)
+			return { success: false, error: 'Password reset failed' }
 		}
 	}
 
@@ -210,6 +258,7 @@ export const Auth = (): AuthContextType => {
 		logout,
 		verifyEmailCode,
 		changePassword,
+		resetPasswordRequest,
 		isLoggedIn,
 		setIsLoggedIn,
 	}

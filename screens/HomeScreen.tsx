@@ -1,11 +1,29 @@
 import React from 'react'
-import { View, Text, StyleSheet, Button } from 'react-native'
+import { View, Text, StyleSheet, Button, Alert } from 'react-native'
+import { useAuthBackend } from '../context/GlobalContext'
 
 const HomeScreen: React.FC = ({ navigation }: any) => {
+	const { logout } = useAuthBackend()
+
+	const handleLogout = async () => {
+		Alert.alert('Logout', 'Are you sure you want to logout?', [
+			{ text: 'Cancel', style: 'cancel' },
+			{
+				text: 'Logout',
+				style: 'destructive',
+				onPress: async () => await logout(),
+			},
+		])
+	}
+
 	return (
 		<View style={styles.container}>
 			<Text style={styles.title}>Welcome to SCaFOMA-UB!</Text>
 			<Text style={styles.subtitle}>This is your test landing screen.</Text>
+			<Button
+				title="Logout"
+				onPress={handleLogout}
+			/>
 		</View>
 	)
 }

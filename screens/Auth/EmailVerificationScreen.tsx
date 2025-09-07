@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { View, Text, TextInput, Button, Alert } from 'react-native'
 import { useAuthBackend } from '../../context/GlobalContext'
 
+const debug = true
+
 const EmailVerificationScreen: React.FC = ({ navigation }: any) => {
 	const { user, verifyEmailCode } = useAuthBackend()
 	const [code, setCode] = useState('')
@@ -18,10 +20,23 @@ const EmailVerificationScreen: React.FC = ({ navigation }: any) => {
 			setLoading(false)
 			return
 		}
+		debug &&
+			console.log(
+				'EmailVerificationScreen: Email verified for user:',
+				result.user
+			)
 		Alert.alert('Success', 'Email verified!')
-		if (user!.newLogin) {
+		if (result.user!.newLogin) {
+			debug &&
+				console.log(
+					'EmailVerificationScreen: Navigating to ChangePasswordScreen for new login.'
+				)
 			navigation.navigate('ChangePassword')
 		} else {
+			debug &&
+				console.log(
+					'EmailVerificationScreen: Navigating to LoginScreen after verification.'
+				)
 			navigation.navigate('Login')
 		}
 		setLoading(false)

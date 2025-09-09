@@ -1,10 +1,10 @@
 import React from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
-//import OrdersScreen from '../screens/OrdersScreen'
-//import ConcessionScreen from '../screens/ConcessionScreen'
-//import ScanQRScreen from '../screens/ScanQRScreen'
-//import GraphsScreen from '../screens/GraphsScreen'
+import OrdersScreen from '../screens/OrdersScreen'
+import ConcessionScreen from '../screens/ConcessionScreen'
+import ScanQRScreen from '../screens/ScanQRScreen'
+import GraphsScreen from '../screens/GraphsScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 
 const Tab = createBottomTabNavigator()
@@ -64,22 +64,22 @@ export default function MainTabNavigator() {
 					}
 				},
 			})}>
-			{/* <Tab.Screen
-				name="Orders"
-				component={OrdersScreen}
-			/> */}
-			{/* <Tab.Screen
-				name="Concession"
-				component={ConcessionScreen}
-			/> */}
-			{/* <Tab.Screen
-				name="ScanQR"
-				component={ScanQRScreen}
-			/> */}
-			{/* <Tab.Screen
-				name="Graphs"
-				component={GraphsScreen}
-			/> */}
+				<Tab.Screen
+					name="Orders"
+					component={OrdersScreen}
+				/>
+				<Tab.Screen
+					name="Concession"
+					component={ConcessionScreen}
+				/>
+				<Tab.Screen
+					name="ScanQR"
+					component={ScanQRScreen}
+				/>
+				<Tab.Screen
+					name="Graphs"
+					component={GraphsScreen}
+				/>
 			<Tab.Screen
 				name="Profile"
 				component={ProfileScreen}

@@ -1,0 +1,154 @@
+import React, { useState } from 'react'
+import {
+	View,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	Image,
+	StyleSheet,
+} from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { useNavigation } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+
+// Replace this with your actual stack param list
+type RootStackParamList = {
+	AddMenuItemSizes: undefined
+	// ...other routes
+}
+
+const AddMenuItemScreen = () => {
+	const [imageUri, setImageUri] = useState<string | null>(null)
+	const [name, setName] = useState('')
+	const navigation =
+		useNavigation<NativeStackNavigationProp<RootStackParamList>>()
+
+	const pickImage = async () => {
+		const result = await ImagePicker.launchImageLibraryAsync({
+			mediaTypes: ImagePicker.MediaTypeOptions.Images,
+			allowsEditing: true,
+			aspect: [1, 1],
+			quality: 1,
+		})
+		if (!result.canceled && result.assets && result.assets.length > 0) {
+			setImageUri(result.assets[0].uri)
+		}
+	}
+
+	const handleNext = () => {
+		// TODO: Pass imageUri and name to next screen
+		navigation.navigate('AddMenuItemSizes')
+	}
+
+	const handleCancel = () => {
+		navigation.goBack()
+	}
+
+	return (
+		<View style={styles.container}>
+			<Text style={styles.title}>Add Menu Item</Text>
+			<TouchableOpacity
+				style={styles.imageSelector}
+				onPress={pickImage}>
+				{imageUri ? (
+					<Image
+						source={{ uri: imageUri }}
+						style={styles.image}
+					/>
+				) : (
+					<Text style={styles.imagePlaceholder}>Select Image</Text>
+				)}
+			</TouchableOpacity>
+			<TextInput
+				style={styles.input}
+				placeholder="Menu Item Name"
+				value={name}
+				onChangeText={setName}
+			/>
+			<View style={styles.buttonRow}>
+				<TouchableOpacity
+					style={styles.cancelButton}
+					onPress={handleCancel}>
+					<Text style={styles.cancelText}>Cancel</Text>
+				</TouchableOpacity>
+				<TouchableOpacity
+					style={[styles.nextButton, { opacity: name ? 1 : 0.5 }]}
+					onPress={handleNext}
+					disabled={!name}>
+					<Text style={styles.nextText}>Next</Text>
+				</TouchableOpacity>
+			</View>
+		</View>
+	)
+}
+
+const styles = StyleSheet.create({
+	container: {
+		flex: 1,
+		backgroundColor: '#fff',
+		padding: 24,
+		justifyContent: 'center',
+	},
+	title: {
+		fontSize: 24,
+		fontWeight: 'bold',
+		marginBottom: 32,
+		alignSelf: 'center',
+	},
+	imageSelector: {
+		alignSelf: 'center',
+		marginBottom: 32,
+		width: 120,
+		height: 120,
+		borderRadius: 60,
+		backgroundColor: '#f0f0f0',
+		justifyContent: 'center',
+		alignItems: 'center',
+		overflow: 'hidden',
+	},
+	image: {
+		width: 120,
+		height: 120,
+		borderRadius: 60,
+	},
+	imagePlaceholder: {
+		color: '#888',
+		fontSize: 16,
+	},
+	input: {
+		borderWidth: 1,
+		borderColor: '#ccc',
+		borderRadius: 8,
+		padding: 12,
+		fontSize: 16,
+		marginBottom: 40,
+	},
+	buttonRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		marginTop: 32,
+	},
+	cancelButton: {
+		backgroundColor: '#eee',
+		paddingVertical: 14,
+		paddingHorizontal: 32,
+		borderRadius: 8,
+	},
+	cancelText: {
+		color: '#333',
+		fontSize: 16,
+	},
+	nextButton: {
+		backgroundColor: '#1976D2',
+		paddingVertical: 14,
+		paddingHorizontal: 32,
+		borderRadius: 8,
+	},
+	nextText: {
+		color: '#fff',
+		fontSize: 16,
+		fontWeight: 'bold',
+	},
+})
+
+export default AddMenuItemScreen

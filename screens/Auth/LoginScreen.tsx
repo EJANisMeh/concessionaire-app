@@ -9,6 +9,8 @@ import {
 } from 'react-native'
 import { useAuthBackend } from '../../context/GlobalContext'
 
+const debug = false
+
 const LoginScreen: React.FC = ({ navigation }: any) => {
 	const { login, setIsLoggedIn } = useAuthBackend()
 	const [email, setEmail] = useState<string>('')
@@ -18,7 +20,7 @@ const LoginScreen: React.FC = ({ navigation }: any) => {
 	const handleLogin = async () => {
 		setLoading(true)
 		const result = await login(email, password)
-		console.log('LoginScreen result.user:', result.user)
+		debug && console.log('LoginScreen result.user:', result.user)
 
 		if (!result.success || !result.user) {
 			Alert.alert('Login Failed', result.error)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import {
 	View,
 	Text,
@@ -8,46 +8,46 @@ import {
 	StyleSheet,
 	KeyboardAvoidingView,
 	Platform,
-	ScrollView,
 } from 'react-native'
+import type { NativeStackScreenProps } from '@react-navigation/native-stack'
+import { AppStackParamList } from '../../navigation/AppStack'
 
-interface SizePrice {
-	size: string
+interface Addon {
+	name: string
 	price: string
 }
 
-const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
-	const [sizes, setSizes] = useState<SizePrice[]>([])
-	const [size, setSize] = useState('')
-	const [price, setPrice] = useState('')
+type Props = NativeStackScreenProps<AppStackParamList, 'AddMenuItemAddonScreen'>
 
-	const handleAddSize = () => {
-		if (!size || !price) return
-		setSizes([...sizes, { size, price }])
-		setSize('')
-		setPrice('')
+const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
+	const [addons, setAddons] = useState<Addon[]>([])
+	const [addonName, setAddonName] = useState('')
+	const [addonPrice, setAddonPrice] = useState('')
+
+	const handleAddAddon = () => {
+		if (!addonName.trim() || !addonPrice.trim()) return
+		setAddons([...addons, { name: addonName.trim(), price: addonPrice.trim() }])
+		setAddonName('')
+		setAddonPrice('')
 	}
 
-	const handleRemoveSize = (idx: number) => {
-		setSizes(sizes.filter((_, i) => i !== idx))
+	const handleRemoveAddon = (idx: number) => {
+		setAddons(addons.filter((_, i) => i !== idx))
 	}
 
 	return (
 		<View style={styles.container}>
-			<View>
-				<Text style={styles.title}>Add Sizes and Prices for</Text>
-				<Text style={styles.subtitle}>Sizes and Prices:</Text>
-			</View>
+			<Text style={styles.title}>Add Addons for Menu Item</Text>
 			<View style={{ flex: 1 }}>
 				<FlatList
-					data={sizes}
+					data={addons}
 					keyExtractor={(_, idx) => idx.toString()}
 					keyboardShouldPersistTaps="handled"
 					renderItem={({ item, index }) => (
-						<View style={styles.sizeRow}>
+						<View style={styles.addonRow}>
 							<TextInput
-								style={styles.sizeInput}
-								value={item.size}
+								style={styles.addonInput}
+								value={item.name}
 								editable={false}
 							/>
 							<TextInput
@@ -57,7 +57,7 @@ const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
 							/>
 							<TouchableOpacity
 								style={styles.removeButton}
-								onPress={() => handleRemoveSize(index)}>
+								onPress={() => handleRemoveAddon(index)}>
 								<Text style={styles.removeButtonText}>⦻</Text>
 							</TouchableOpacity>
 						</View>
@@ -69,23 +69,23 @@ const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
 			<KeyboardAvoidingView
 				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 				keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-				<View style={styles.sizeRow}>
+				<View style={styles.addonRow}>
 					<TextInput
-						style={styles.sizeInput}
-						placeholder="Size"
-						value={size}
-						onChangeText={setSize}
+						style={styles.addonInput}
+						placeholder="Addon Name"
+						value={addonName}
+						onChangeText={setAddonName}
 					/>
 					<TextInput
 						style={styles.priceInput}
 						placeholder="₱ Price"
-						value={price}
-						onChangeText={setPrice}
+						value={addonPrice}
+						onChangeText={setAddonPrice}
 						keyboardType="numeric"
 					/>
 					<TouchableOpacity
 						style={styles.addButton}
-						onPress={handleAddSize}>
+						onPress={handleAddAddon}>
 						<Text style={styles.addButtonText}>＋</Text>
 					</TouchableOpacity>
 				</View>
@@ -96,15 +96,11 @@ const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
 						<Text style={styles.buttonText}>Back</Text>
 					</TouchableOpacity>
 					<TouchableOpacity
-						style={styles.nextButton}
+						style={styles.submitButton}
 						onPress={() => {
-							// Pass sizes array (just the size names) to AddMenuItemVariationsScreen
-							const sizeNames = sizes.map((s) => s.size)
-							navigation.navigate('AddMenuItemVariationsScreen', {
-								sizes: sizeNames,
-							})
+							// TODO: Next step
 						}}>
-						<Text style={styles.buttonText}>Next</Text>
+						<Text style={styles.buttonText}>Finish</Text>
 					</TouchableOpacity>
 				</View>
 			</KeyboardAvoidingView>
@@ -126,9 +122,12 @@ const styles = StyleSheet.create({
 		alignSelf: 'center',
 		marginBottom: 8,
 	},
-	subtitle: { color: '#fff', marginBottom: 8, fontSize: 16 },
-	sizeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-	sizeInput: {
+	addonRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginBottom: 8,
+	},
+	addonInput: {
 		flex: 2,
 		backgroundColor: '#333',
 		color: '#fff',
@@ -169,7 +168,7 @@ const styles = StyleSheet.create({
 		marginTop: 32,
 		marginBottom: 16,
 	},
-	nextButton: {
+	submitButton: {
 		flex: 1,
 		backgroundColor: '#b71c1c',
 		borderRadius: 8,
@@ -188,4 +187,4 @@ const styles = StyleSheet.create({
 	buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 })
 
-export default AddMenuItemSizesScreen
+export default AddMenuItemAddonScreen

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
 	View,
 	Text,
@@ -8,30 +8,20 @@ import {
 	StyleSheet,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
-import { useNavigation } from '@react-navigation/native'
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useMenuBackend } from '../../context/GlobalContext'
 
-// Replace this with your actual stack param list
-type RootStackParamList = {
-	AddMenuItemSizes: undefined
-	// ...other routes
-}
-
-const AddMenuItemScreen = () => {
-	const [imageUri, setImageUri] = useState<string | null>(null)
-	const [name, setName] = useState('')
-	const navigation =
-		useNavigation<NativeStackNavigationProp<RootStackParamList>>()
+const AddMenuItemScreen: React.FC = ({ navigation }: any) => {
+	const menuBackend = useMenuBackend()
 
 	const pickImage = async () => {
 		const result = await ImagePicker.launchImageLibraryAsync({
-			mediaTypes: ImagePicker.MediaTypeOptions.Images,
+			mediaTypes: 'images',
 			allowsEditing: true,
 			aspect: [1, 1],
 			quality: 1,
 		})
 		if (!result.canceled && result.assets && result.assets.length > 0) {
-			setImageUri(result.assets[0].uri)
+			menuBackend.setCurrentItemImageUri(result.assets[0].uri)
 		}
 	}
 
@@ -50,9 +40,9 @@ const AddMenuItemScreen = () => {
 			<TouchableOpacity
 				style={styles.imageSelector}
 				onPress={pickImage}>
-				{imageUri ? (
+				{menuBackend.currentItemImageUri ? (
 					<Image
-						source={{ uri: imageUri }}
+						source={{ uri: menuBackend.currentItemImageUri }}
 						style={styles.image}
 					/>
 				) : (
@@ -62,8 +52,8 @@ const AddMenuItemScreen = () => {
 			<TextInput
 				style={styles.input}
 				placeholder="Menu Item Name"
-				value={name}
-				onChangeText={setName}
+				value={menuBackend.currentItemName}
+				onChangeText={menuBackend.setCurrentItemName}
 			/>
 			<View style={styles.buttonRow}>
 				<TouchableOpacity
@@ -72,9 +62,12 @@ const AddMenuItemScreen = () => {
 					<Text style={styles.cancelText}>Cancel</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
-					style={[styles.nextButton, { opacity: name ? 1 : 0.5 }]}
+					style={[
+						styles.nextButton,
+						{ opacity: menuBackend.currentItemName ? 1 : 0.5 },
+					]}
 					onPress={handleNext}
-					disabled={!name}>
+					disabled={!menuBackend.currentItemName}>
 					<Text style={styles.nextText}>Next</Text>
 				</TouchableOpacity>
 			</View>

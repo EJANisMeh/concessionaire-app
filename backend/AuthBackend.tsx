@@ -12,22 +12,24 @@ import {
 	QuerySnapshot,
 } from 'firebase/firestore'
 
-export interface UserProfile {
+// Interfaces
+// User data structure in Firestore
+interface UserProfile {
 	email: string
 	passwordHash: string
 	newLogin: boolean
 	emailVerified: boolean
+	concessionId: string
 }
 
+// Result structure for login attempts
 interface LoginResult {
 	success: boolean
 	error?: string
 	user?: UserProfile
 }
 
-const debugBool: boolean = true
-const hardCodedEmailCode: string = '123456'
-
+// Auth functions and state to be returned types
 interface AuthContextType {
 	user: UserProfile | null
 	login: (email: string, password: string) => Promise<LoginResult>
@@ -47,10 +49,16 @@ interface AuthContextType {
 	) => Promise<{ success: boolean; error?: string; user?: UserProfile }>
 }
 
+// Constants
+const debugBool: boolean = false
+const hardCodedEmailCode: string = '123456'
+
+// main
 export const Auth = (): AuthContextType => {
 	const [user, setUser] = useState<UserProfile | null>(null)
 	const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false)
 
+	// Query users collection for a given email
 	const querySnapshotViaEmail = async (
 		email: string
 	): Promise<QuerySnapshot<DocumentData>> => {
@@ -61,6 +69,7 @@ export const Auth = (): AuthContextType => {
 		return querySnapshot
 	}
 
+	// Get user document for a given email
 	const getUserDocViaEmail = async (
 		email: string
 	): Promise<{ userDoc?: DocumentData; error?: string }> => {
@@ -76,6 +85,9 @@ export const Auth = (): AuthContextType => {
 			return { error: err.message || 'Unknown error' }
 		}
 	}
+
+	// Login function
+	// hardcoded password comparison for prototype only
 	const login: AuthContextType['login'] = async (email, password) => {
 		debugBool && console.log('Login Debug: Attempting login for:', email)
 		setUser(null)
@@ -120,15 +132,16 @@ export const Auth = (): AuthContextType => {
 			}
 
 			return { success: true, user: userData }
-		} catch (err: any) {
+
 			// On error, clear user and set error message
+		} catch (err: any) {
 			debugBool && console.log('Login Debug: Login error:', err.message)
 			setUser(null)
 			return { success: false, error: 'Login failed' }
 		}
 	}
 
-	// Logout user by clearing local state.
+	// Logout user by clearing local state
 	const logout: AuthContextType['logout'] = async () => {
 		setIsLoggedIn(false)
 		setUser(null)
@@ -209,6 +222,7 @@ export const Auth = (): AuthContextType => {
 		}
 	}
 
+	// Request password reset
 	const resetPasswordRequest: AuthContextType['resetPasswordRequest'] = async (
 		email
 	) => {

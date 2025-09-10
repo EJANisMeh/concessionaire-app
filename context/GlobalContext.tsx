@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react'
 import { Auth } from '../backend/AuthBackend'
-// import { useMenu } from './MenuContext' // For future modules
+import { MenuBackend } from '../backend/MenuBackend'
 
 const GlobalContext = createContext<any>(null)
 
@@ -8,7 +8,7 @@ export const GlobalProvider = ({ children }: { children: ReactNode }) => {
 	// Instantiate all modules here
 	const Contexts = {
 		Auth: Auth(),
-		// menu: useMenu(), // Add more as needed
+		menu: MenuBackend(),
 		// profile: useProfile(),
 		// orders: useOrders(),
 	}
@@ -20,6 +20,6 @@ export const GlobalProvider = ({ children }: { children: ReactNode }) => {
 
 // Custom hooks for each module
 export const useAuthBackend = () => useContext(GlobalContext).Auth
-// export const useMenuBackend = () => useContext(GlobalContext).menu
+export const useMenuBackend = () => useContext(GlobalContext).menu
 // export const useProfileBackend = () => useContext(GlobalContext).profile
 // export const useOrdersBackend = () => useContext(GlobalContext).orders

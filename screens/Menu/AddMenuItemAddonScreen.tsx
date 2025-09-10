@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
 	View,
 	Text,
@@ -8,7 +8,9 @@ import {
 	StyleSheet,
 	KeyboardAvoidingView,
 	Platform,
+	Alert,
 } from 'react-native'
+import { useMenuBackend } from '../../context/GlobalContext'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { AppStackParamList } from '../../navigation/AppStack'
 
@@ -20,19 +22,74 @@ interface Addon {
 type Props = NativeStackScreenProps<AppStackParamList, 'AddMenuItemAddonScreen'>
 
 const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
-	const [addons, setAddons] = useState<Addon[]>([])
-	const [addonName, setAddonName] = useState('')
-	const [addonPrice, setAddonPrice] = useState('')
+	const menuBackend = useMenuBackend()
+	const addons = menuBackend.addons
+	const setAddons = menuBackend.setAddons
+	const addonName = menuBackend.addonName
+	const setAddonName = menuBackend.setAddonName
+	const addonPrice = menuBackend.addonPrice
+	const setAddonPrice = menuBackend.setAddonPrice
 
 	const handleAddAddon = () => {
-		if (!addonName.trim() || !addonPrice.trim()) return
-		setAddons([...addons, { name: addonName.trim(), price: addonPrice.trim() }])
+		const safeName =
+			typeof menuBackend.addonName === 'string' ? menuBackend.addonName : ''
+		const safePrice =
+			typeof menuBackend.addonPrice === 'string' ? menuBackend.addonPrice : ''
+		if (!safeName.trim() || !safePrice.trim()) return
+		setAddons([...addons, { name: safeName.trim(), price: safePrice.trim() }])
 		setAddonName('')
 		setAddonPrice('')
 	}
 
 	const handleRemoveAddon = (idx: number) => {
-		setAddons(addons.filter((_, i) => i !== idx))
+		Alert.alert(
+			'Remove Addon?',
+			'Are you sure you want to remove this addon?',
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: 'Remove',
+					style: 'destructive',
+					onPress: () =>
+						setAddons(addons.filter((_: any, i: number) => i !== idx)),
+				},
+			]
+		)
+	}
+
+	const handleMoveUp = (idx: number) => {
+		if (idx === 0) return
+		const newAddons = [...addons]
+		const temp = newAddons[idx - 1]
+		newAddons[idx - 1] = newAddons[idx]
+		newAddons[idx] = temp
+		setAddons(newAddons)
+	}
+
+	const handleMoveDown = (idx: number) => {
+		if (idx === addons.length - 1) return
+		const newAddons = [...addons]
+		const temp = newAddons[idx + 1]
+		newAddons[idx + 1] = newAddons[idx]
+		newAddons[idx] = temp
+		setAddons(newAddons)
+	}
+
+	const handleFinish = () => {
+		Alert.alert(
+			'Finish Adding Menu Item?',
+			'Are you sure you want to finish? This will save the menu item.',
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: 'Finish',
+					style: 'destructive',
+					onPress: () => {
+						// TODO: Save to backend and navigate away
+					},
+				},
+			]
+		)
 	}
 
 	return (
@@ -48,17 +105,46 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 							<TextInput
 								style={styles.addonInput}
 								value={item.name}
-								editable={false}
+								editable={true}
+								onChangeText={(text) => {
+									const updated = [...addons]
+									updated[index] = { ...updated[index], name: text }
+									setAddons(updated)
+								}}
 							/>
 							<TextInput
 								style={styles.priceInput}
 								value={item.price}
-								editable={false}
+								editable={true}
+								keyboardType="numeric"
+								onChangeText={(text) => {
+									const updated = [...addons]
+									updated[index] = { ...updated[index], price: text }
+									setAddons(updated)
+								}}
 							/>
 							<TouchableOpacity
 								style={styles.removeButton}
 								onPress={() => handleRemoveAddon(index)}>
 								<Text style={styles.removeButtonText}>⦻</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={[
+									styles.moveButton,
+									index === 0 ? { opacity: 0.4 } : null,
+								]}
+								onPress={() => handleMoveUp(index)}
+								disabled={index === 0}>
+								<Text style={styles.moveButtonText}>↑</Text>
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={[
+									styles.moveButton,
+									index === addons.length - 1 ? { opacity: 0.4 } : null,
+								]}
+								onPress={() => handleMoveDown(index)}
+								disabled={index === addons.length - 1}>
+								<Text style={styles.moveButtonText}>↓</Text>
 							</TouchableOpacity>
 						</View>
 					)}
@@ -96,10 +182,21 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 						<Text style={styles.buttonText}>Back</Text>
 					</TouchableOpacity>
 					<TouchableOpacity
-						style={styles.submitButton}
-						onPress={() => {
-							// TODO: Next step
-						}}>
+						style={[
+							styles.submitButton,
+							{
+								opacity:
+									addons.length === 0 ||
+									addons.every((a: Addon) => a.name.trim() && a.price.trim())
+										? 1
+										: 0.5,
+							},
+						]}
+						onPress={handleFinish}
+						disabled={
+							addons.length > 0 &&
+							addons.some((a: Addon) => !a.name.trim() || !a.price.trim())
+						}>
 						<Text style={styles.buttonText}>Finish</Text>
 					</TouchableOpacity>
 				</View>
@@ -161,7 +258,17 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		marginLeft: 8,
 	},
-	removeButtonText: { color: '#fff', fontSize: 18 },
+	removeButtonText: { color: '#d32f2f', fontSize: 18 },
+	moveButton: {
+		backgroundColor: '#444',
+		borderRadius: 20,
+		width: 36,
+		height: 36,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginLeft: 4,
+	},
+	moveButtonText: { color: '#fff', fontSize: 18 },
 	bottomButtons: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',

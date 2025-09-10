@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import {
 	View,
 	Text,
@@ -6,9 +6,12 @@ import {
 	TouchableOpacity,
 	Image,
 	StyleSheet,
+	Alert,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { useMenuBackend } from '../../context/GlobalContext'
+
+const debug = false
 
 const AddMenuItemScreen: React.FC = ({ navigation }: any) => {
 	const menuBackend = useMenuBackend()
@@ -30,35 +33,81 @@ const AddMenuItemScreen: React.FC = ({ navigation }: any) => {
 		navigation.navigate('AddMenuItemSizes')
 	}
 
-	const handleCancel = () => {
-		navigation.goBack()
+	let beforeRemoveListener: (() => void) | null = null
+
+	const confirmCancel = () => {
+		Alert.alert(
+			'Cancel Menu Item?',
+			'Are you sure you want to cancel adding this menu item? All unsaved changes will be lost.',
+			[
+				{ text: 'No', style: 'cancel' },
+				{
+					text: 'Yes',
+					onPress: () => {
+						menuBackend.resetCurrentItem()
+						if (beforeRemoveListener) beforeRemoveListener()
+						navigation.goBack()
+					},
+					style: 'destructive',
+				},
+			]
+		)
 	}
+
+	useEffect(() => {
+		debug && console.log('AddMenuItemScreen rendered')
+
+		const beforeRemove = (e: any) => {
+			e.preventDefault()
+			Alert.alert(
+				'Cancel Menu Item?',
+				'Are you sure you want to cancel adding this menu item? All unsaved changes will be lost.',
+				[
+					{ text: 'No', style: 'cancel', onPress: () => {} },
+					{
+						text: 'Yes',
+						onPress: () => {
+							menuBackend.resetCurrentItem()
+							navigation.dispatch(e.data.action)
+						},
+						style: 'destructive',
+					},
+				]
+			)
+		}
+
+		const unsubscribe = navigation.addListener('beforeRemove', beforeRemove)
+		beforeRemoveListener = unsubscribe
+		return unsubscribe
+	}, [navigation, menuBackend])
 
 	return (
 		<View style={styles.container}>
 			<Text style={styles.title}>Add Menu Item</Text>
-			<TouchableOpacity
-				style={styles.imageSelector}
-				onPress={pickImage}>
-				{menuBackend.currentItemImageUri ? (
-					<Image
-						source={{ uri: menuBackend.currentItemImageUri }}
-						style={styles.image}
-					/>
-				) : (
-					<Text style={styles.imagePlaceholder}>Select Image</Text>
-				)}
-			</TouchableOpacity>
-			<TextInput
-				style={styles.input}
-				placeholder="Menu Item Name"
-				value={menuBackend.currentItemName}
-				onChangeText={menuBackend.setCurrentItemName}
-			/>
+			<View style={styles.centerContent}>
+				<TouchableOpacity
+					style={styles.imageSelector}
+					onPress={pickImage}>
+					{menuBackend.currentItemImageUri ? (
+						<Image
+							source={{ uri: menuBackend.currentItemImageUri }}
+							style={styles.image}
+						/>
+					) : (
+						<Text style={styles.imagePlaceholder}>Select Image</Text>
+					)}
+				</TouchableOpacity>
+				<TextInput
+					style={styles.input}
+					placeholder="Menu Item Name"
+					value={menuBackend.currentItemName}
+					onChangeText={menuBackend.setCurrentItemName}
+				/>
+			</View>
 			<View style={styles.buttonRow}>
 				<TouchableOpacity
 					style={styles.cancelButton}
-					onPress={handleCancel}>
+					onPress={confirmCancel}>
 					<Text style={styles.cancelText}>Cancel</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
@@ -78,64 +127,83 @@ const AddMenuItemScreen: React.FC = ({ navigation }: any) => {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#fff',
+		backgroundColor: '#222',
 		padding: 24,
-		justifyContent: 'center',
 	},
 	title: {
-		fontSize: 24,
+		fontSize: 20,
 		fontWeight: 'bold',
-		marginBottom: 32,
+		color: '#fff',
+		marginBottom: 12,
 		alignSelf: 'center',
 	},
 	imageSelector: {
 		alignSelf: 'center',
 		marginBottom: 32,
-		width: 120,
-		height: 120,
-		borderRadius: 60,
+		width: 160, // increase from 120
+		height: 160,
+		borderRadius: 80,
 		backgroundColor: '#f0f0f0',
 		justifyContent: 'center',
 		alignItems: 'center',
 		overflow: 'hidden',
 	},
 	image: {
-		width: 120,
-		height: 120,
-		borderRadius: 60,
+		width: 160,
+		height: 160,
+		borderRadius: 80,
 	},
 	imagePlaceholder: {
 		color: '#888',
 		fontSize: 16,
 	},
 	input: {
-		borderWidth: 1,
-		borderColor: '#ccc',
+		backgroundColor: '#333',
+		color: '#fff',
 		borderRadius: 8,
 		padding: 12,
-		fontSize: 16,
-		marginBottom: 40,
+		fontSize: 18, // increase font size
+		marginBottom: 24,
+		width: '80%', // make input wider
+		alignSelf: 'center',
+	},
+	centerContent: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
 	},
 	buttonRow: {
+		position: 'absolute',
+		bottom: 0,
+		left: 0,
+		right: 0,
 		flexDirection: 'row',
 		justifyContent: 'space-between',
+		paddingHorizontal: 16,
+		paddingBottom: 16,
 		marginTop: 32,
+		marginBottom: 16,
 	},
 	cancelButton: {
-		backgroundColor: '#eee',
-		paddingVertical: 14,
-		paddingHorizontal: 32,
+		flex: 1,
+		backgroundColor: '#d32f2f',
 		borderRadius: 8,
+		paddingVertical: 14,
+		marginLeft: 8,
+		alignItems: 'center',
 	},
 	cancelText: {
-		color: '#333',
+		color: '#fff',
 		fontSize: 16,
+		fontWeight: 'bold',
 	},
 	nextButton: {
-		backgroundColor: '#1976D2',
-		paddingVertical: 14,
-		paddingHorizontal: 32,
+		flex: 1,
+		backgroundColor: '#b71c1c',
 		borderRadius: 8,
+		paddingVertical: 14,
+		marginRight: 8,
+		alignItems: 'center',
 	},
 	nextText: {
 		color: '#fff',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
 	View,
 	Text,
@@ -7,8 +7,10 @@ import {
 	TouchableOpacity,
 	Modal,
 	Pressable,
+	Alert,
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
+import { useAuthBackend, useMenuBackend } from '../context/GlobalContext'
 const { useNavigation } = require('@react-navigation/native')
 
 type MenuItem = {
@@ -18,28 +20,39 @@ type MenuItem = {
 	available: boolean
 }
 
-const initialMenu: MenuItem[] = [
-	{
-		id: '1',
-		name: 'Hotdog',
-		image: 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png',
-		available: true,
-	},
-	{
-		id: '2',
-		name: 'Soda',
-		image: 'https://cdn-icons-png.flaticon.com/512/3075/3075979.png',
-		available: false,
-	},
-]
+const debug = false
 
 const ConcessionScreen = () => {
-	const [menu, setMenu] = useState<MenuItem[]>(initialMenu)
+	const [loading, setLoading] = useState(false)
+	const [menu, setMenu] = useState<MenuItem[]>([])
+	const authBackend = useAuthBackend()
+	const menuBackend = useMenuBackend()
+	// Fetch menu items from Firestore
+	const fetchMenuItems = useCallback(async () => {
+		if (!authBackend.user?.concessionId) return
+		const menuId = await menuBackend.getMenuId(authBackend.user.concessionId)
+		if (!menuId) return
+		const items = await menuBackend.getItems(menuId)
+		// Map backend items to local MenuItem type (add id)
+		setMenu(
+			items.map((item: any, idx: number) => ({
+				id: item.id || String(idx),
+				name: item.name,
+				image: item.imageUrl,
+				available: item.availability ?? false,
+			}))
+		)
+	}, [authBackend.user, menuBackend])
+
+	useEffect(() => {
+		fetchMenuItems()
+	}, [fetchMenuItems])
 	const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
 	const [modalVisible, setModalVisible] = useState(false)
 	const navigation = useNavigation()
 	const handleAddItem = () => {
 		navigation.navigate('AddMenuItem')
+		// After adding, refetch menu items when returning to this screen
 	}
 
 	const handleMenuPress = (item: any) => {
@@ -60,14 +73,46 @@ const ConcessionScreen = () => {
 	}
 	const handleToggleAvailability = () => {
 		if (!selectedItem) return
-		setMenu(
-			menu.map((item) =>
-				item.id === selectedItem.id
-					? { ...item, available: !item.available }
-					: item
-			)
-		)
-		handleCloseModal()
+		setLoading(true)
+		;(async () => {
+			debug &&
+				console.log(
+					'Concession: Toggling availability for item:',
+					selectedItem.id
+				)
+			try {
+				debug && console.log('Concession: Getting menu Id')
+				const menuId = await menuBackend.getMenuId(
+					authBackend.user.concessionId
+				)
+				if (!menuId) throw new Error('No menu found')
+				// Find the item in menu array
+				debug && console.log('Concession: Finding item in local state')
+				const itemIdx = menu.findIndex((item) => item.id === selectedItem.id)
+				if (itemIdx === -1) throw new Error('Item not found')
+				// Update backend
+				debug &&
+					console.log('Concession: Updating item availability in backend')
+				await menuBackend.updateItem(menuId, selectedItem.id, {
+					availability: !selectedItem.available,
+				})
+				debug && console.log('Concession: Backend update successful')
+				// Update local state
+				debug && console.log('Concession: Updating local state')
+				setMenu(
+					menu.map((item) =>
+						item.id === selectedItem.id
+							? { ...item, available: !item.available }
+							: item
+					)
+				)
+				handleCloseModal()
+			} catch (err) {
+				Alert.alert('Error', 'Failed to update availability.')
+			} finally {
+				setLoading(false)
+			}
+		})()
 	}
 	const handleEdit = () => {
 		// TODO: Navigate to edit screen
@@ -76,6 +121,22 @@ const ConcessionScreen = () => {
 
 	return (
 		<View style={{ flex: 1, padding: 20 }}>
+			{loading && (
+				<View
+					style={{
+						position: 'absolute',
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: 'rgba(255,255,255,0.5)',
+						justifyContent: 'center',
+						alignItems: 'center',
+						zIndex: 10,
+					}}>
+					<Text style={{ fontSize: 18 }}>Updating...</Text>
+				</View>
+			)}
 			<Text style={{ fontSize: 24, marginBottom: 16 }}>Concession Menu</Text>
 			<FlatList
 				data={menu}

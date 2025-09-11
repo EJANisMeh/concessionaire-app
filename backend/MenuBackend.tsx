@@ -27,6 +27,7 @@ export interface MenuItem {
 	sizes: { size: string; price: number }[]
 	variations: Variation[]
 	addons: { name: string; price: number }[]
+	availability: boolean
 }
 
 export interface MenuBackendType {
@@ -38,6 +39,7 @@ export interface MenuBackendType {
 		item: Partial<MenuItem>
 	) => Promise<void>
 	deleteItem: (menuId: string, itemId: string) => Promise<void>
+	getMenuId: (concessionId: string) => Promise<string | null>
 	currentItemName: string
 	setCurrentItemName: (name: string) => void
 	currentItemImageUri: string | null
@@ -58,8 +60,11 @@ export interface MenuBackendType {
 	setAddonName: (name: string) => void
 	addonPrice: string
 	setAddonPrice: (price: string) => void
+	saveCurrentItem: (menuId: string) => Promise<string>
 	resetCurrentItem: () => void
 }
+
+const debug = true
 
 export const Menu = (): MenuBackendType => {
 	const [currentItemName, setCurrentItemName] = useState<string>('')
@@ -75,22 +80,36 @@ export const Menu = (): MenuBackendType => {
 	const [addonName, setAddonName] = useState<string>('')
 	const [addonPrice, setAddonPrice] = useState<string>('')
 
-	const resetCurrentItem = () => {
-		setCurrentItemName('')
-		setCurrentItemImageUri(null)
-		setSizes([])
-		setSize('')
-		setPrice('')
-		setVariations([])
-		setAddons([])
-		setAddonName('')
-		setAddonPrice('')
-	}
-
 	const getItems = async (menuId: string): Promise<MenuItem[]> => {
 		const itemsRef = collection(db, 'menu', menuId, 'items')
 		const snapshot = await getDocs(itemsRef)
-		return snapshot.docs.map((doc) => doc.data() as MenuItem)
+		return snapshot.docs.map(
+			(doc) =>
+				({
+					...doc.data(),
+					id: doc.id,
+				} as MenuItem & { id: string })
+		)
+	}
+
+	const getMenuId = async (concessionId: string): Promise<string | null> => {
+		// Query the 'menu' collection for a document with matching concessionId
+		debug && console.log('getMenuId debug: concessionId =', concessionId)
+		try {
+			const menuRef = collection(db, 'menu')
+			// Firestore query: where('concessionId', '==', concessionId)
+			// Import 'query' and 'where' from firestore if not already
+			// @ts-ignore
+			const { query, where, getDocs } = await import('firebase/firestore')
+			const q = query(menuRef, where('concessionId', '==', concessionId))
+			const snapshot = await getDocs(q)
+			if (snapshot.empty) return null
+			// Return the first menu document's id
+			return snapshot.docs[0].id
+		} catch (err) {
+			debug && console.log('Error getting menuId:', err)
+			return null
+		}
 	}
 
 	const addItem = async (menuId: string, item: MenuItem): Promise<string> => {
@@ -104,6 +123,15 @@ export const Menu = (): MenuBackendType => {
 		itemId: string,
 		item: Partial<MenuItem>
 	): Promise<void> => {
+		debug &&
+			console.log(
+				'updateItem debug: menuId =',
+				menuId,
+				'itemId =',
+				itemId,
+				'item =',
+				item
+			)
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
 		await updateDoc(itemRef, item)
 	}
@@ -113,11 +141,49 @@ export const Menu = (): MenuBackendType => {
 		await deleteDoc(itemRef)
 	}
 
+	// Data structurer
+	const buildMenuItem = (): MenuItem => {
+		debug && console.log('Building menu item')
+		return {
+			name: currentItemName,
+			imageUrl: currentItemImageUri || '',
+			sizes: sizes.map((s) => ({ size: s.size, price: Number(s.price) })),
+			variations: variations.map((v) => ({
+				name: v.name,
+				prices: Object.fromEntries(
+					Object.entries(v.prices).map(([size, price]) => [size, Number(price)])
+				),
+			})),
+			addons: addons.map((a) => ({ name: a.name, price: Number(a.price) })),
+			availability: false,
+		}
+	}
+
+	// Save current item to Firestore
+	const saveCurrentItem = async (menuId: string): Promise<string> => {
+		debug && console.log('Saving current item to menu')
+		const item = buildMenuItem()
+		return await addItem(menuId, item)
+	}
+
+	const resetCurrentItem = () => {
+		setCurrentItemName('')
+		setCurrentItemImageUri(null)
+		setSizes([])
+		setSize('')
+		setPrice('')
+		setVariations([])
+		setAddons([])
+		setAddonName('')
+		setAddonPrice('')
+	}
+
 	return {
 		getItems,
 		addItem,
 		updateItem,
 		deleteItem,
+		getMenuId,
 		currentItemName,
 		setCurrentItemName,
 		currentItemImageUri,
@@ -138,6 +204,7 @@ export const Menu = (): MenuBackendType => {
 		setAddonName,
 		addonPrice,
 		setAddonPrice,
+		saveCurrentItem,
 		resetCurrentItem,
 	}
 }

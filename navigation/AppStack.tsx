@@ -7,7 +7,7 @@ import { useAuthBackend } from '../context/GlobalContext'
 
 export type AppStackParamList = {
 	AuthStack: undefined
-	MainTabs: undefined
+	MainTabs: { screen?: string } | undefined
 	AddMenuItem: undefined
 	AddMenuItemSizes: undefined
 	AddMenuItemVariationsScreen: { sizes: string[] }

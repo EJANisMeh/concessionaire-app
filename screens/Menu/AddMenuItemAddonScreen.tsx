@@ -10,9 +10,10 @@ import {
 	Platform,
 	Alert,
 } from 'react-native'
-import { useMenuBackend } from '../../context/GlobalContext'
+import { useAuthBackend, useMenuBackend } from '../../context/GlobalContext'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { AppStackParamList } from '../../navigation/AppStack'
+import { auth } from '@/firebase'
 
 interface Addon {
 	name: string
@@ -21,7 +22,10 @@ interface Addon {
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AddMenuItemAddonScreen'>
 
+const debug = true
+
 const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
+	const authBackend = useAuthBackend()
 	const menuBackend = useMenuBackend()
 	const addons = menuBackend.addons
 	const setAddons = menuBackend.setAddons
@@ -84,8 +88,25 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 				{
 					text: 'Finish',
 					style: 'destructive',
-					onPress: () => {
-						// TODO: Save to backend and navigate away
+					onPress: async () => {
+						debug && console.log('AddOnScreen: Submittiing menu item')
+						try {
+							debug && console.log('AddOnScreen: Getting menu Id')
+							const menuId = await menuBackend.getMenuId(
+								authBackend.user.concessionId
+							)
+							if (!menuId) {
+								Alert.alert('Error', 'No menu found for this concessionaire.')
+								return
+							}
+
+							debug && console.log('AddOnScreen: Submittiing menu item')
+							await menuBackend.saveCurrentItem(menuId)
+							menuBackend.resetCurrentItem()
+							navigation.navigate('MainTabs', { screen: 'Concession' })
+						} catch (err) {
+							Alert.alert('Error', 'Failed to save menu item.')
+						}
 					},
 				},
 			]

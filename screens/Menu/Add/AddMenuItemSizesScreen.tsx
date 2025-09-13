@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useMenuBackend } from '../../context/GlobalContext'
+import { useMenuBackend } from '../../../context/GlobalContext'
 import {
 	View,
 	Text,

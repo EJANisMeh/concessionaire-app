@@ -10,9 +10,9 @@ import {
 	Platform,
 	Alert,
 } from 'react-native'
-import { useAuthBackend, useMenuBackend } from '../../context/GlobalContext'
+import { useAuthBackend, useMenuBackend } from '../../../context/GlobalContext'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
-import { AppStackParamList } from '../../navigation/AppStack'
+import { AppStackParamList } from '../../../navigation/AppStack'
 import { auth } from '@/firebase'
 
 interface Addon {
@@ -89,7 +89,7 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 					text: 'Finish',
 					style: 'destructive',
 					onPress: async () => {
-						debug && console.log('AddOnScreen: Submittiing menu item')
+						debug && console.log('AddOnScreen: Submitting menu item')
 						try {
 							debug && console.log('AddOnScreen: Getting menu Id')
 							const menuId = await menuBackend.getMenuId(
@@ -99,8 +99,7 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 								Alert.alert('Error', 'No menu found for this concessionaire.')
 								return
 							}
-
-							debug && console.log('AddOnScreen: Submittiing menu item')
+							debug && console.log('AddOnScreen: Submitting menu item')
 							await menuBackend.saveCurrentItem(menuId)
 							menuBackend.resetCurrentItem()
 							navigation.navigate('MainTabs', { screen: 'Concession' })

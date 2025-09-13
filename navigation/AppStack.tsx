@@ -1,6 +1,5 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import AuthStackScreen from './AuthStackScreen'
 import MainTabNavigator from './MainTabNavigator'
 import { useAuthBackend } from '../context/GlobalContext'
@@ -12,6 +11,7 @@ export type AppStackParamList = {
 	AddMenuItemSizes: undefined
 	AddMenuItemVariationsScreen: { sizes: string[] }
 	AddMenuItemAddonScreen: undefined
+	EditMenuItem: { menuItemId: string }
 }
 
 const Stack = createNativeStackNavigator<AppStackParamList>()
@@ -34,27 +34,34 @@ export default function AppStack() {
 					/>
 					<Stack.Screen
 						name="AddMenuItem"
-						component={require('../screens/Menu/AddMenuItemScreen').default}
+						component={require('../screens/Menu/Add/AddMenuItemScreen').default}
 						options={{ presentation: 'modal' }}
 					/>
 					<Stack.Screen
 						name="AddMenuItemSizes"
 						component={
-							require('../screens/Menu/AddMenuItemSizesScreen').default
+							require('../screens/Menu/Add/AddMenuItemSizesScreen').default
 						}
 						options={{ presentation: 'modal' }}
 					/>
 					<Stack.Screen
 						name="AddMenuItemVariationsScreen"
 						component={
-							require('../screens/Menu/AddMenuItemVariationsScreen').default
+							require('../screens/Menu/Add/AddMenuItemVariationsScreen').default
 						}
 						options={{ presentation: 'modal' }}
 					/>
 					<Stack.Screen
 						name="AddMenuItemAddonScreen"
 						component={
-							require('../screens/Menu/AddMenuItemAddonScreen').default
+							require('../screens/Menu/Add/AddMenuItemAddonScreen').default
+						}
+						options={{ presentation: 'modal' }}
+					/>
+					<Stack.Screen
+						name="EditMenuItem"
+						component={
+							require('../screens/Menu/Edit/EditMenuItemScreen').default
 						}
 						options={{ presentation: 'modal' }}
 					/>

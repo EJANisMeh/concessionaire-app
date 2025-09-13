@@ -11,9 +11,9 @@ import {
 	Alert,
 } from 'react-native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
-import { AppStackParamList } from '../../navigation/AppStack'
-import { useMenuBackend } from '../../context/GlobalContext'
-import type { VariationInput } from '../../backend/MenuBackend'
+import { AppStackParamList } from '../../../navigation/AppStack'
+import { useMenuBackend } from '../../../context/GlobalContext'
+import type { VariationInput } from '../../../backend/MenuBackend'
 
 type Props = NativeStackScreenProps<
 	AppStackParamList,

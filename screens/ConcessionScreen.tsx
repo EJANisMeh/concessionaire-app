@@ -71,52 +71,79 @@ const ConcessionScreen = () => {
 		setMenu(menu.filter((item) => item.id !== selectedItem.id))
 		handleCloseModal()
 	}
+
 	const handleToggleAvailability = () => {
 		if (!selectedItem) return
-		setLoading(true)
-		;(async () => {
-			debug &&
-				console.log(
-					'Concession: Toggling availability for item:',
-					selectedItem.id
-				)
-			try {
-				debug && console.log('Concession: Getting menu Id')
-				const menuId = await menuBackend.getMenuId(
-					authBackend.user.concessionId
-				)
-				if (!menuId) throw new Error('No menu found')
-				// Find the item in menu array
-				debug && console.log('Concession: Finding item in local state')
-				const itemIdx = menu.findIndex((item) => item.id === selectedItem.id)
-				if (itemIdx === -1) throw new Error('Item not found')
-				// Update backend
-				debug &&
-					console.log('Concession: Updating item availability in backend')
-				await menuBackend.updateItem(menuId, selectedItem.id, {
-					availability: !selectedItem.available,
-				})
-				debug && console.log('Concession: Backend update successful')
-				// Update local state
-				debug && console.log('Concession: Updating local state')
-				setMenu(
-					menu.map((item) =>
-						item.id === selectedItem.id
-							? { ...item, available: !item.available }
-							: item
-					)
-				)
-				handleCloseModal()
-			} catch (err) {
-				Alert.alert('Error', 'Failed to update availability.')
-			} finally {
-				setLoading(false)
-			}
-		})()
+		const actionText = selectedItem.available
+			? 'mark this item as Out of Stock'
+			: 'mark this item as Available'
+		Alert.alert(
+			'Confirm Availability Change',
+			`Are you sure you want to ${actionText}?`,
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: selectedItem.available
+						? 'Mark as Out of Stock'
+						: 'Mark as Available',
+					style: 'destructive',
+					onPress: () => {
+						// Immediately close modal before async update
+						handleCloseModal()
+						setLoading(true)
+						;(async () => {
+							debug &&
+								console.log(
+									'Concession: Toggling availability for item:',
+									selectedItem.id
+								)
+							try {
+								debug && console.log('Concession: Getting menu Id')
+								const menuId = await menuBackend.getMenuId(
+									authBackend.user.concessionId
+								)
+								if (!menuId) throw new Error('No menu found')
+								// Find the item in menu array
+								debug && console.log('Concession: Finding item in local state')
+								const itemIdx = menu.findIndex(
+									(item) => item.id === selectedItem.id
+								)
+								if (itemIdx === -1) throw new Error('Item not found')
+								// Update backend
+								debug &&
+									console.log(
+										'Concession: Updating item availability in backend'
+									)
+								await menuBackend.updateItem(menuId, selectedItem.id, {
+									availability: !selectedItem.available,
+								})
+								debug && console.log('Concession: Backend update successful')
+								// Update local state
+								debug && console.log('Concession: Updating local state')
+								setMenu(
+									menu.map((item) =>
+										item.id === selectedItem.id
+											? { ...item, available: !item.available }
+											: item
+									)
+								)
+							} catch (err) {
+								Alert.alert('Error', 'Failed to update availability.')
+							} finally {
+								setLoading(false)
+							}
+						})()
+					},
+				},
+			]
+		)
 	}
+
 	const handleEdit = () => {
-		// TODO: Navigate to edit screen
+		if (!selectedItem) return
+		console.log('Editing item:', selectedItem.id)
 		handleCloseModal()
+		navigation.navigate('EditMenuItem', { menuItemId: selectedItem.id })
 	}
 
 	return (

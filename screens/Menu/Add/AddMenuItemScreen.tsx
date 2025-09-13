@@ -9,7 +9,7 @@ import {
 	Alert,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
-import { useMenuBackend } from '../../context/GlobalContext'
+import { useMenuBackend } from '../../../context/GlobalContext'
 
 const debug = false
 
@@ -24,6 +24,7 @@ const AddMenuItemScreen: React.FC = ({ navigation }: any) => {
 			quality: 1,
 		})
 		if (!result.canceled && result.assets && result.assets.length > 0) {
+			// Only save the local URI for now
 			menuBackend.setCurrentItemImageUri(result.assets[0].uri)
 		}
 	}

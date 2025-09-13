@@ -67,20 +67,79 @@ export interface MenuBackendType {
 const debug = true
 
 export const Menu = (): MenuBackendType => {
-	const [currentItemName, setCurrentItemName] = useState<string>('')
-	const [currentItemImageUri, setCurrentItemImageUri] = useState<string | null>(
-		null
-	)
-	const [sizes, setSizes] = useState<{ size: string; price: string }[]>([])
-	const [size, setSize] = useState<string>('')
-	const [price, setPrice] = useState<string>('')
-	const [variations, setVariations] = useState<VariationInput[]>([])
-	const [variationName, setVariationName] = useState<string>('')
-	const [addons, setAddons] = useState<{ name: string; price: string }[]>([])
-	const [addonName, setAddonName] = useState<string>('')
-	const [addonPrice, setAddonPrice] = useState<string>('')
+	// Helper to upload image if needed
+	const uploadImageToCloudinary = async (
+		imageUri: string | null
+	): Promise<string | null> => {
+		if (!imageUri || imageUri.startsWith('http')) return imageUri
+		try {
+			const CLOUDINARY_URL =
+				'https://api.cloudinary.com/v1_1/db6gcoyum/image/upload'
+			const UPLOAD_PRESET = 'SCaFOMA-UB'
+			const formData = new FormData()
+			formData.append('file', {
+				uri: imageUri,
+				type: 'image/jpeg',
+				name: `menu-image-${Date.now()}.jpg`,
+			} as any)
+			formData.append('upload_preset', UPLOAD_PRESET)
+			const response = await fetch(CLOUDINARY_URL, {
+				method: 'POST',
+				body: formData,
+			})
+			const data = await response.json()
+			if (data.secure_url) {
+				return data.secure_url
+			} else {
+				debug && console.log('Cloudinary upload error:', data)
+				return null
+			}
+		} catch (err) {
+			debug &&
+				console.log('MenuBackend: Failed to upload image to Cloudinary', err)
+			return null
+		}
+	}
+	const [currentItemName, setCurrentItemName]: [
+		MenuBackendType['currentItemName'],
+		MenuBackendType['setCurrentItemName']
+	] = useState<string>('')
+	const [currentItemImageUri, setCurrentItemImageUri]: [
+		MenuBackendType['currentItemImageUri'],
+		MenuBackendType['setCurrentItemImageUri']
+	] = useState<string | null>(null)
+	const [sizes, setSizes]: [
+		MenuBackendType['sizes'],
+		MenuBackendType['setSizes']
+	] = useState<{ size: string; price: string }[]>([])
+	const [size, setSize]: [MenuBackendType['size'], MenuBackendType['setSize']] =
+		useState<string>('')
+	const [price, setPrice]: [
+		MenuBackendType['price'],
+		MenuBackendType['setPrice']
+	] = useState<string>('')
+	const [variations, setVariations]: [
+		MenuBackendType['variations'],
+		MenuBackendType['setVariations']
+	] = useState<VariationInput[]>([])
+	const [variationName, setVariationName]: [
+		MenuBackendType['variationName'],
+		MenuBackendType['setVariationName']
+	] = useState<string>('')
+	const [addons, setAddons]: [
+		MenuBackendType['addons'],
+		MenuBackendType['setAddons']
+	] = useState<{ name: string; price: string }[]>([])
+	const [addonName, setAddonName]: [
+		MenuBackendType['addonName'],
+		MenuBackendType['setAddonName']
+	] = useState<string>('')
+	const [addonPrice, setAddonPrice]: [
+		MenuBackendType['addonPrice'],
+		MenuBackendType['setAddonPrice']
+	] = useState<string>('')
 
-	const getItems = async (menuId: string): Promise<MenuItem[]> => {
+	const getItems: MenuBackendType['getItems'] = async (menuId) => {
 		const itemsRef = collection(db, 'menu', menuId, 'items')
 		const snapshot = await getDocs(itemsRef)
 		return snapshot.docs.map(
@@ -92,9 +151,8 @@ export const Menu = (): MenuBackendType => {
 		)
 	}
 
-	const getMenuId = async (concessionId: string): Promise<string | null> => {
+	const getMenuId: MenuBackendType['getMenuId'] = async (concessionId) => {
 		// Query the 'menu' collection for a document with matching concessionId
-		debug && console.log('getMenuId debug: concessionId =', concessionId)
 		try {
 			const menuRef = collection(db, 'menu')
 			// Firestore query: where('concessionId', '==', concessionId)
@@ -107,22 +165,22 @@ export const Menu = (): MenuBackendType => {
 			// Return the first menu document's id
 			return snapshot.docs[0].id
 		} catch (err) {
-			debug && console.log('Error getting menuId:', err)
+			debug && console.log('getMenuId debug: Error getting menuId:', err)
 			return null
 		}
 	}
 
-	const addItem = async (menuId: string, item: MenuItem): Promise<string> => {
+	const addItem: MenuBackendType['addItem'] = async (menuId, item) => {
 		const itemsRef = collection(db, 'menu', menuId, 'items')
 		const docRef = await addDoc(itemsRef, item)
 		return docRef.id
 	}
 
-	const updateItem = async (
-		menuId: string,
-		itemId: string,
-		item: Partial<MenuItem>
-	): Promise<void> => {
+	const updateItem: MenuBackendType['updateItem'] = async (
+		menuId,
+		itemId,
+		item
+	) => {
 		debug &&
 			console.log(
 				'updateItem debug: menuId =',
@@ -136,7 +194,7 @@ export const Menu = (): MenuBackendType => {
 		await updateDoc(itemRef, item)
 	}
 
-	const deleteItem = async (menuId: string, itemId: string): Promise<void> => {
+	const deleteItem: MenuBackendType['deleteItem'] = async (menuId, itemId) => {
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
 		await deleteDoc(itemRef)
 	}
@@ -160,13 +218,27 @@ export const Menu = (): MenuBackendType => {
 	}
 
 	// Save current item to Firestore
-	const saveCurrentItem = async (menuId: string): Promise<string> => {
+	const saveCurrentItem: MenuBackendType['saveCurrentItem'] = async (
+		menuId
+	) => {
 		debug && console.log('Saving current item to menu')
-		const item = buildMenuItem()
+		// Upload image to Cloudinary if needed
+		let imageUrl = currentItemImageUri
+		if (imageUrl && !imageUrl.startsWith('http')) {
+			const uploadedUrl = await uploadImageToCloudinary(imageUrl)
+			if (uploadedUrl) {
+				setCurrentItemImageUri(uploadedUrl)
+				imageUrl = uploadedUrl
+			}
+		}
+		const item = {
+			...buildMenuItem(),
+			imageUrl: imageUrl || '',
+		}
 		return await addItem(menuId, item)
 	}
 
-	const resetCurrentItem = () => {
+	const resetCurrentItem: MenuBackendType['resetCurrentItem'] = () => {
 		setCurrentItemName('')
 		setCurrentItemImageUri(null)
 		setSizes([])

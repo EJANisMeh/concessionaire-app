@@ -25,6 +25,9 @@ type Props = NativeStackScreenProps<AppStackParamList, 'AddMenuItemAddonScreen'>
 const debug = true
 
 const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
+	const [progressMessage, setProgressMessage] = React.useState<string | null>(
+		null
+	)
 	const authBackend = useAuthBackend()
 	const menuBackend = useMenuBackend()
 	const addons = menuBackend.addons
@@ -91,19 +94,23 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 					onPress: async () => {
 						debug && console.log('AddOnScreen: Submitting menu item')
 						try {
-							debug && console.log('AddOnScreen: Getting menu Id')
+							setProgressMessage('Getting menu database')
 							const menuId = await menuBackend.getMenuId(
 								authBackend.user.concessionId
 							)
 							if (!menuId) {
+								setProgressMessage(null)
 								Alert.alert('Error', 'No menu found for this concessionaire.')
 								return
 							}
-							debug && console.log('AddOnScreen: Submitting menu item')
-							await menuBackend.saveCurrentItem(menuId)
-							menuBackend.resetCurrentItem()
-							navigation.navigate('MainTabs', { screen: 'Concession' })
+							await menuBackend.saveCurrentItem(menuId, setProgressMessage)
+							setTimeout(() => {
+								setProgressMessage(null)
+								menuBackend.resetCurrentItem()
+								navigation.navigate('MainTabs', { screen: 'Concession' })
+							}, 1000)
 						} catch (err) {
+							setProgressMessage(null)
 							Alert.alert('Error', 'Failed to save menu item.')
 						}
 					},
@@ -115,6 +122,11 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 	return (
 		<View style={styles.container}>
 			<Text style={styles.title}>Add Addons for Menu Item</Text>
+			{progressMessage && (
+				<View style={styles.progressOverlay}>
+					<Text style={styles.progressText}>{progressMessage}</Text>
+				</View>
+			)}
 			<View style={{ flex: 1 }}>
 				<FlatList
 					data={addons}
@@ -226,6 +238,26 @@ const AddMenuItemAddonScreen: React.FC<Props> = ({ navigation }) => {
 }
 
 const styles = StyleSheet.create({
+	progressOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		backgroundColor: 'rgba(0,0,0,0.7)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 10,
+	},
+	progressText: {
+		color: '#fff',
+		fontSize: 20,
+		fontWeight: 'bold',
+		textAlign: 'center',
+		padding: 24,
+		backgroundColor: 'rgba(0,0,0,0.8)',
+		borderRadius: 12,
+	},
 	container: {
 		flex: 1,
 		padding: 16,

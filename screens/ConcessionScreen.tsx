@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
+// ...existing code...
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
 	View,
 	Text,
@@ -25,15 +27,16 @@ const debug = false
 const ConcessionScreen = () => {
 	const [loading, setLoading] = useState(false)
 	const [menu, setMenu] = useState<MenuItem[]>([])
+	const [refreshing, setRefreshing] = useState(false)
 	const authBackend = useAuthBackend()
 	const menuBackend = useMenuBackend()
-	// Fetch menu items from Firestore
+
+	// Fetch menu items from Firestore or cache
 	const fetchMenuItems = useCallback(async () => {
 		if (!authBackend.user?.concessionId) return
 		const menuId = await menuBackend.getMenuId(authBackend.user.concessionId)
 		if (!menuId) return
 		const items = await menuBackend.getItems(menuId)
-		// Map backend items to local MenuItem type (add id)
 		setMenu(
 			items.map((item: any, idx: number) => ({
 				id: item.id || String(idx),
@@ -47,12 +50,35 @@ const ConcessionScreen = () => {
 	useEffect(() => {
 		fetchMenuItems()
 	}, [fetchMenuItems])
+
+	const handleRefresh = () => {
+		Alert.alert(
+			'Refreshing Concession Menu',
+			'Refresh the page? This will attempt to fetch new data from the server.',
+			[
+				{
+					text: 'Cancel',
+					style: 'cancel',
+					onPress: () => setRefreshing(false),
+				},
+				{
+					text: 'Refresh',
+					style: 'default',
+					onPress: async () => {
+						setRefreshing(true)
+						await fetchMenuItems()
+						setRefreshing(false)
+					},
+				},
+			]
+		)
+	}
+
 	const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
 	const [modalVisible, setModalVisible] = useState(false)
 	const navigation = useNavigation()
 	const handleAddItem = () => {
 		navigation.navigate('AddMenuItem')
-		// After adding, refetch menu items when returning to this screen
 	}
 
 	const handleMenuPress = (item: any) => {
@@ -65,11 +91,53 @@ const ConcessionScreen = () => {
 		setSelectedItem(null)
 	}
 
-	// Placeholder actions
 	const handleRemove = () => {
 		if (!selectedItem) return
-		setMenu(menu.filter((item) => item.id !== selectedItem.id))
-		handleCloseModal()
+		Alert.alert(
+			'Delete Menu Item?',
+			`Are you sure you want to delete "${selectedItem.name}"? This action cannot be undone.`,
+			[
+				{ text: 'Cancel', style: 'cancel' },
+				{
+					text: 'Delete',
+					style: 'destructive',
+					onPress: async () => {
+						setLoading(true)
+						try {
+							// Check permission before deletion
+							const hasPermission =
+								await menuBackend.checkAndRequestPermission?.()
+							if (!hasPermission) {
+								Alert.alert(
+									'Permission Denied',
+									'Cannot delete menu item without permission.'
+								)
+								setLoading(false)
+								return
+							}
+							// Get menuId
+							const menuId = await menuBackend.getMenuId(
+								authBackend.user.concessionId
+							)
+							if (!menuId) throw new Error('No menu found')
+							// Delete from Firestore
+							await menuBackend.deleteItem(menuId, selectedItem.id)
+							// Remove associated cache (menu items)
+							await AsyncStorage.removeItem(`menu_items_${menuId}`)
+							// Optionally, remove cached image file if needed (not implemented here)
+							// Refresh menu
+							await fetchMenuItems()
+							Alert.alert('Deleted', 'Menu item deleted and cache cleared.')
+						} catch (err) {
+							Alert.alert('Error', 'Failed to delete menu item.')
+						} finally {
+							setLoading(false)
+							handleCloseModal()
+						}
+					},
+				},
+			]
+		)
 	}
 
 	const handleToggleAvailability = () => {
@@ -88,38 +156,21 @@ const ConcessionScreen = () => {
 						: 'Mark as Available',
 					style: 'destructive',
 					onPress: () => {
-						// Immediately close modal before async update
 						handleCloseModal()
 						setLoading(true)
 						;(async () => {
-							debug &&
-								console.log(
-									'Concession: Toggling availability for item:',
-									selectedItem.id
-								)
 							try {
-								debug && console.log('Concession: Getting menu Id')
 								const menuId = await menuBackend.getMenuId(
 									authBackend.user.concessionId
 								)
 								if (!menuId) throw new Error('No menu found')
-								// Find the item in menu array
-								debug && console.log('Concession: Finding item in local state')
 								const itemIdx = menu.findIndex(
 									(item) => item.id === selectedItem.id
 								)
 								if (itemIdx === -1) throw new Error('Item not found')
-								// Update backend
-								debug &&
-									console.log(
-										'Concession: Updating item availability in backend'
-									)
 								await menuBackend.updateItem(menuId, selectedItem.id, {
 									availability: !selectedItem.available,
 								})
-								debug && console.log('Concession: Backend update successful')
-								// Update local state
-								debug && console.log('Concession: Updating local state')
 								setMenu(
 									menu.map((item) =>
 										item.id === selectedItem.id
@@ -207,6 +258,8 @@ const ConcessionScreen = () => {
 						</TouchableOpacity>
 					</View>
 				)}
+				refreshing={refreshing}
+				onRefresh={handleRefresh}
 			/>
 			{/* Add Item Button */}
 			<View style={{ position: 'absolute', bottom: 32, alignSelf: 'center' }}>

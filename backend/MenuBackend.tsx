@@ -1,5 +1,10 @@
 import { useState } from 'react'
 import { db } from '../firebase'
+import { useMediaLibraryPermission } from '../hooks/useMediaLibraryPermission'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as FileSystem from 'expo-file-system'
+import { downloadAsync } from 'expo-file-system/legacy'
+import * as MediaLibrary from 'expo-media-library'
 import {
 	collection,
 	addDoc,
@@ -7,6 +12,8 @@ import {
 	doc,
 	updateDoc,
 	deleteDoc,
+	query,
+	where,
 } from 'firebase/firestore'
 
 // For Firestore
@@ -22,6 +29,7 @@ export interface VariationInput {
 }
 
 export interface MenuItem {
+	id?: string
 	name: string
 	imageUrl: string
 	sizes: { size: string; price: number }[]
@@ -60,19 +68,45 @@ export interface MenuBackendType {
 	setAddonName: (name: string) => void
 	addonPrice: string
 	setAddonPrice: (price: string) => void
-	saveCurrentItem: (menuId: string) => Promise<string>
+	saveCurrentItem: (
+		menuId: string,
+		onProgress?: (msg: string) => void
+	) => Promise<string>
 	resetCurrentItem: () => void
 }
 
 const debug = true
 
 export const Menu = (): MenuBackendType => {
+	// State hooks
+	const [currentItemName, setCurrentItemName] =
+		useState<MenuBackendType['currentItemName']>('')
+	const [currentItemImageUri, setCurrentItemImageUri] =
+		useState<MenuBackendType['currentItemImageUri']>(null)
+	const [sizes, setSizes] = useState<MenuBackendType['sizes']>([])
+	const [size, setSize] = useState<MenuBackendType['size']>('')
+	const [price, setPrice] = useState<MenuBackendType['price']>('')
+	const [variations, setVariations] = useState<MenuBackendType['variations']>(
+		[]
+	)
+	const [variationName, setVariationName] =
+		useState<MenuBackendType['variationName']>('')
+	const [addons, setAddons] = useState<MenuBackendType['addons']>([])
+	const [addonName, setAddonName] = useState<MenuBackendType['addonName']>('')
+	const [addonPrice, setAddonPrice] =
+		useState<MenuBackendType['addonPrice']>('')
+	// Media library permission hook
+	const { checkAndRequestPermission } = useMediaLibraryPermission()
+
 	// Helper to upload image if needed
 	const uploadImageToCloudinary = async (
-		imageUri: string | null
+		imageUri: string | null,
+		onProgress?: (msg: string) => void
 	): Promise<string | null> => {
+		debug && console.log('Saving image to database')
 		if (!imageUri || imageUri.startsWith('http')) return imageUri
 		try {
+			onProgress && onProgress('Uploading image to database...')
 			const CLOUDINARY_URL =
 				'https://api.cloudinary.com/v1_1/db6gcoyum/image/upload'
 			const UPLOAD_PRESET = 'SCaFOMA-UB'
@@ -89,80 +123,42 @@ export const Menu = (): MenuBackendType => {
 			})
 			const data = await response.json()
 			if (data.secure_url) {
+				onProgress && onProgress('Image uploaded!')
 				return data.secure_url
 			} else {
 				debug && console.log('Cloudinary upload error:', data)
+				onProgress && onProgress('Cloudinary upload error')
 				return null
 			}
 		} catch (err) {
 			debug &&
 				console.log('MenuBackend: Failed to upload image to Cloudinary', err)
+			onProgress && onProgress('Failed to upload image to Cloudinary')
 			return null
 		}
 	}
-	const [currentItemName, setCurrentItemName]: [
-		MenuBackendType['currentItemName'],
-		MenuBackendType['setCurrentItemName']
-	] = useState<string>('')
-	const [currentItemImageUri, setCurrentItemImageUri]: [
-		MenuBackendType['currentItemImageUri'],
-		MenuBackendType['setCurrentItemImageUri']
-	] = useState<string | null>(null)
-	const [sizes, setSizes]: [
-		MenuBackendType['sizes'],
-		MenuBackendType['setSizes']
-	] = useState<{ size: string; price: string }[]>([])
-	const [size, setSize]: [MenuBackendType['size'], MenuBackendType['setSize']] =
-		useState<string>('')
-	const [price, setPrice]: [
-		MenuBackendType['price'],
-		MenuBackendType['setPrice']
-	] = useState<string>('')
-	const [variations, setVariations]: [
-		MenuBackendType['variations'],
-		MenuBackendType['setVariations']
-	] = useState<VariationInput[]>([])
-	const [variationName, setVariationName]: [
-		MenuBackendType['variationName'],
-		MenuBackendType['setVariationName']
-	] = useState<string>('')
-	const [addons, setAddons]: [
-		MenuBackendType['addons'],
-		MenuBackendType['setAddons']
-	] = useState<{ name: string; price: string }[]>([])
-	const [addonName, setAddonName]: [
-		MenuBackendType['addonName'],
-		MenuBackendType['setAddonName']
-	] = useState<string>('')
-	const [addonPrice, setAddonPrice]: [
-		MenuBackendType['addonPrice'],
-		MenuBackendType['setAddonPrice']
-	] = useState<string>('')
 
 	const getItems: MenuBackendType['getItems'] = async (menuId) => {
-		const itemsRef = collection(db, 'menu', menuId, 'items')
-		const snapshot = await getDocs(itemsRef)
-		return snapshot.docs.map(
-			(doc) =>
-				({
-					...doc.data(),
-					id: doc.id,
-				} as MenuItem & { id: string })
-		)
+		try {
+			const itemsRef = collection(db, 'menu', menuId, 'items')
+			const snapshot = await getDocs(itemsRef)
+			const items: MenuItem[] = snapshot.docs.map((doc: any) => ({
+				...doc.data(),
+				id: doc.id,
+			}))
+			return items
+		} catch (err) {
+			debug && console.log('MenuBackend: Firestore fetch error', err)
+			return []
+		}
 	}
 
 	const getMenuId: MenuBackendType['getMenuId'] = async (concessionId) => {
-		// Query the 'menu' collection for a document with matching concessionId
 		try {
 			const menuRef = collection(db, 'menu')
-			// Firestore query: where('concessionId', '==', concessionId)
-			// Import 'query' and 'where' from firestore if not already
-			// @ts-ignore
-			const { query, where, getDocs } = await import('firebase/firestore')
 			const q = query(menuRef, where('concessionId', '==', concessionId))
 			const snapshot = await getDocs(q)
 			if (snapshot.empty) return null
-			// Return the first menu document's id
 			return snapshot.docs[0].id
 		} catch (err) {
 			debug && console.log('getMenuId debug: Error getting menuId:', err)
@@ -181,15 +177,7 @@ export const Menu = (): MenuBackendType => {
 		itemId,
 		item
 	) => {
-		debug &&
-			console.log(
-				'updateItem debug: menuId =',
-				menuId,
-				'itemId =',
-				itemId,
-				'item =',
-				item
-			)
+		debug && console.log('updateItem debug:', { menuId, itemId, item })
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
 		await updateDoc(itemRef, item)
 	}
@@ -217,25 +205,41 @@ export const Menu = (): MenuBackendType => {
 		}
 	}
 
-	// Save current item to Firestore
 	const saveCurrentItem: MenuBackendType['saveCurrentItem'] = async (
-		menuId
+		menuId,
+		onProgress
 	) => {
 		debug && console.log('Saving current item to menu')
+		// Permission check before cache update
+		const hasPermission = await checkAndRequestPermission()
+		if (!hasPermission) {
+			debug &&
+				console.log(
+					'Media library permission not granted. Skipping cache update.'
+				)
+		}
+		onProgress && onProgress('Preparing to save item...')
 		// Upload image to Cloudinary if needed
 		let imageUrl = currentItemImageUri
-		if (imageUrl && !imageUrl.startsWith('http')) {
-			const uploadedUrl = await uploadImageToCloudinary(imageUrl)
+		if (
+			imageUrl &&
+			typeof imageUrl === 'string' &&
+			imageUrl.startsWith('http') === false
+		) {
+			const uploadedUrl = await uploadImageToCloudinary(imageUrl, onProgress)
 			if (uploadedUrl) {
-				setCurrentItemImageUri(uploadedUrl)
 				imageUrl = uploadedUrl
+				setCurrentItemImageUri(uploadedUrl)
 			}
 		}
+		onProgress && onProgress('Saving item to database...')
 		const item = {
 			...buildMenuItem(),
 			imageUrl: imageUrl || '',
 		}
-		return await addItem(menuId, item)
+		const id = await addItem(menuId, item)
+		onProgress && onProgress('Item saved!')
+		return id
 	}
 
 	const resetCurrentItem: MenuBackendType['resetCurrentItem'] = () => {
@@ -245,11 +249,13 @@ export const Menu = (): MenuBackendType => {
 		setSize('')
 		setPrice('')
 		setVariations([])
+		setVariationName('')
 		setAddons([])
 		setAddonName('')
 		setAddonPrice('')
 	}
 
+	// Return backend API
 	return {
 		getItems,
 		addItem,

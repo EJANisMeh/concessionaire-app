@@ -1,6 +1,16 @@
-import React, { createContext, useContext, ReactNode } from 'react'
+import React, {
+	createContext,
+	useContext,
+	ReactNode,
+	useState,
+	useEffect,
+} from 'react'
 import { Auth } from '../backend/AuthBackend'
 import { Menu } from '../backend/MenuBackend'
+// ...existing code...
+import { useMediaLibraryPermission } from '../hooks/useMediaLibraryPermission'
+
+// Permission utility is now imported from hooks/useMediaLibraryPermission
 
 const GlobalContext = createContext<any>(null)
 

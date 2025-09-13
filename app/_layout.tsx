@@ -4,7 +4,7 @@ import { GlobalProvider } from '../context/GlobalContext'
 import AppStack from '../navigation/AppStack'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
-export default function RootLayout() {
+export default function Layout() {
 	return (
 		<SafeAreaProvider>
 			<GlobalProvider>

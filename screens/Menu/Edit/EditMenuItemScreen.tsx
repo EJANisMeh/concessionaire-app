@@ -24,27 +24,37 @@ const EditMenuItemScreen: React.FC = ({ navigation, route }: any) => {
 	const [error, setError] = useState('')
 	const [item, setItem] = useState<any>(null)
 
+	// Try to get cached items from menuBackend context
+	const cachedItems = menuBackend.items || []
+
 	// Fetch menu item details on mount
 	useEffect(() => {
-		const fetchItem = async () => {
+		const loadItem = async () => {
 			try {
-				// TODO: Replace with actual menuItemId from route.params
 				const menuItemId = route.params?.menuItemId
-				const menuId = await menuBackend.getMenuId(
-					authBackend.user.concessionId
-				)
-				const items = await menuBackend.getItems(menuId)
-				const itemFound = items.find((i: any) => i.id === menuItemId)
-				setItem(itemFound)
-				console.log('Fetched item:', itemFound)
+				// Try to find item in local cache first
+				const cachedItem = cachedItems.find((i: any) => i.id === menuItemId)
+				if (cachedItem) {
+					setItem(cachedItem)
+					console.log('Loaded item from cache:', cachedItem)
+				} else {
+					// Fallback to network fetch if not found in cache
+					const menuId = await menuBackend.getMenuId(
+						authBackend.user.concessionId
+					)
+					const items = await menuBackend.getItems(menuId)
+					const itemFound = items.find((i: any) => i.id === menuItemId)
+					setItem(itemFound)
+					console.log('Fetched item from backend:', itemFound)
+				}
 			} catch (err) {
 				setError('Failed to load menu item.')
 			} finally {
 				setLoading(false)
 			}
 		}
-		fetchItem()
-	}, [route.params])
+		loadItem()
+	}, [route.params, cachedItems])
 
 	// Image picker
 	const pickImage = async () => {

@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuthBackend, useMenuBackend } from '../context/GlobalContext'
-const { useNavigation } = require('@react-navigation/native')
+import { useNavigation, useIsFocused } from '@react-navigation/native'
 
 type MenuItem = {
 	id: string
@@ -42,7 +42,6 @@ const ConcessionScreen = () => {
 				id: item.id || String(idx),
 				name: item.name,
 				image: item.imageUrl,
-				available: item.availability ?? false,
 			}))
 		)
 	}, [authBackend.user, menuBackend])
@@ -50,6 +49,14 @@ const ConcessionScreen = () => {
 	useEffect(() => {
 		fetchMenuItems()
 	}, [fetchMenuItems])
+
+	// navigation and focus
+	const navigation: any = useNavigation()
+	const isFocused = useIsFocused()
+
+	useEffect(() => {
+		if (isFocused) fetchMenuItems()
+	}, [isFocused])
 
 	const handleRefresh = () => {
 		Alert.alert(
@@ -76,7 +83,6 @@ const ConcessionScreen = () => {
 
 	const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
 	const [modalVisible, setModalVisible] = useState(false)
-	const navigation = useNavigation()
 	const handleAddItem = () => {
 		navigation.navigate('AddMenuItem')
 	}
@@ -104,17 +110,6 @@ const ConcessionScreen = () => {
 					onPress: async () => {
 						setLoading(true)
 						try {
-							// Check permission before deletion
-							const hasPermission =
-								await menuBackend.checkAndRequestPermission?.()
-							if (!hasPermission) {
-								Alert.alert(
-									'Permission Denied',
-									'Cannot delete menu item without permission.'
-								)
-								setLoading(false)
-								return
-							}
 							// Get menuId
 							const menuId = await menuBackend.getMenuId(
 								authBackend.user.concessionId
@@ -122,12 +117,9 @@ const ConcessionScreen = () => {
 							if (!menuId) throw new Error('No menu found')
 							// Delete from Firestore
 							await menuBackend.deleteItem(menuId, selectedItem.id)
-							// Remove associated cache (menu items)
-							await AsyncStorage.removeItem(`menu_items_${menuId}`)
-							// Optionally, remove cached image file if needed (not implemented here)
 							// Refresh menu
 							await fetchMenuItems()
-							Alert.alert('Deleted', 'Menu item deleted and cache cleared.')
+							Alert.alert('Deleted', 'Menu item deleted.')
 						} catch (err) {
 							Alert.alert('Error', 'Failed to delete menu item.')
 						} finally {
@@ -231,6 +223,7 @@ const ConcessionScreen = () => {
 							elevation: 2,
 						}}>
 						<Image
+							key={item.image}
 							source={{ uri: item.image }}
 							style={{
 								width: 48,

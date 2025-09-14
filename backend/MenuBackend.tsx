@@ -44,7 +44,8 @@ export interface MenuBackendType {
 	updateItem: (
 		menuId: string,
 		itemId: string,
-		item: Partial<MenuItem>
+		item: Partial<MenuItem>,
+		onProgress?: (msg: string) => void
 	) => Promise<void>
 	deleteItem: (menuId: string, itemId: string) => Promise<void>
 	getMenuId: (concessionId: string) => Promise<string | null>
@@ -97,6 +98,77 @@ export const Menu = (): MenuBackendType => {
 		useState<MenuBackendType['addonPrice']>('')
 	// Media library permission hook
 	const { checkAndRequestPermission } = useMediaLibraryPermission()
+
+	// Helper to delete Cloudinary assets.
+	// Strategy:
+	// 1) Try Firebase callable (across common regions)
+	// 2) If not deployed or unavailable (e.g. Spark plan), fall back to an
+	//    authenticated HTTP endpoint (e.g. a Vercel serverless function) you
+	//    can deploy separately. This avoids requiring Blaze billing on Firebase.
+	//
+	// To use the HTTP fallback, deploy `api/deleteCloudinaryAsset.js` to Vercel
+	// (or another server) and set the endpoint & secret below.
+	const DELETE_ASSET_ENDPOINT = '' // e.g. 'https://your-app.vercel.app/api/deleteCloudinaryAsset'
+	const DELETE_ASSET_API_KEY = '' // set to a long random secret and keep it private
+
+	const callDeleteCloudinaryAsset = async (publicId: string) => {
+		// First try calling Firebase callable across common regions
+		try {
+			const functionsModule = await import('firebase/functions')
+			const { getFunctions, httpsCallable } = functionsModule
+			const regionsToTry = [undefined, 'us-central1', 'europe-west1']
+			let lastErr: any = null
+			for (const region of regionsToTry) {
+				try {
+					const funcs = region
+						? getFunctions(undefined, region)
+						: getFunctions()
+					const callable = httpsCallable(funcs, 'deleteCloudinaryAsset')
+					await callable({ publicId })
+					return
+				} catch (err) {
+					lastErr = err
+					// If function not found or service disabled, keep trying fallback regions
+					const code = (err as any)?.code || (err as any)?.status
+					const message = (err as any)?.message || ''
+					if (typeof code === 'string' && code.includes('not-found')) continue
+					if (
+						typeof message === 'string' &&
+						message.includes('Cloud Functions API has not been used')
+					)
+						continue
+					// otherwise rethrow
+					throw err
+				}
+			}
+			// If all callable attempts failed, fall through to HTTP fallback below
+			throw lastErr
+		} catch (callableErr) {
+			// If no HTTP fallback configured, propagate the callable error
+			if (!DELETE_ASSET_ENDPOINT || !DELETE_ASSET_API_KEY) throw callableErr
+
+			// Try HTTP authenticated endpoint as a fallback. The endpoint expects
+			// a JSON POST of { publicId } and an `x-delete-api-key` header.
+			try {
+				const res = await fetch(DELETE_ASSET_ENDPOINT, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'x-delete-api-key': DELETE_ASSET_API_KEY,
+					},
+					body: JSON.stringify({ publicId }),
+				})
+				if (!res.ok) {
+					const text = await res.text()
+					throw new Error(`HTTP delete fallback failed: ${res.status} ${text}`)
+				}
+				return
+			} catch (httpErr) {
+				// Prefer showing the original callable error if present
+				throw callableErr || httpErr
+			}
+		}
+	}
 
 	// Helper to upload image if needed
 	const uploadImageToCloudinary = async (
@@ -175,15 +247,131 @@ export const Menu = (): MenuBackendType => {
 	const updateItem: MenuBackendType['updateItem'] = async (
 		menuId,
 		itemId,
-		item
+		item,
+		onProgress
 	) => {
 		debug && console.log('updateItem debug:', { menuId, itemId, item })
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
+
+		// If a new local image URI was provided (not a cloud URL), try to delete
+		// the previous cloud image first, then upload the new image and update
+		// the document with the resulting secure URL.
+		try {
+			// Fetch existing item to get its current imageUrl
+			const { getDoc } = await import('firebase/firestore')
+			const snap = await getDoc(itemRef)
+			let currentImageUrl: string | undefined = undefined
+			if (snap.exists()) {
+				currentImageUrl = snap.data().imageUrl
+			}
+
+			// Support either `imageUri` (local file) or a non-http `imageUrl` from
+			// the UI. If the incoming image is a local path, upload it and ensure
+			// the Firestore payload contains the resulting Cloudinary URL.
+			const incomingImageLocalPath =
+				(item && (item as any).imageUri) ||
+				(item &&
+					(item as any).imageUrl &&
+					typeof (item as any).imageUrl === 'string' &&
+					!(item as any).imageUrl.startsWith('http') &&
+					(item as any).imageUrl)
+
+			if (incomingImageLocalPath) {
+				// Delete existing cloud image if present
+				if (
+					currentImageUrl &&
+					typeof currentImageUrl === 'string' &&
+					currentImageUrl.startsWith('http')
+				) {
+					onProgress && onProgress('Deleting previous image from database...')
+					try {
+						const matches = currentImageUrl.match(
+							/\/upload\/.*\/(.*)\.[a-zA-Z]+$/
+						)
+						const publicId = matches ? matches[1] : undefined
+						if (publicId) {
+							// Call the callable function via a helper that retries common regions
+							try {
+								await callDeleteCloudinaryAsset(publicId)
+							} catch (err) {
+								debug &&
+									console.log('Failed to delete via callable function', err)
+							}
+						}
+					} catch (err) {
+						debug &&
+							console.log(
+								'Failed to delete previous image from Cloudinary',
+								err
+							)
+					}
+				}
+
+				// Upload the new local image and replace the payload
+				onProgress && onProgress('Uploading image to database...')
+				const uploaded = await uploadImageToCloudinary(
+					incomingImageLocalPath,
+					onProgress
+				)
+				if (uploaded) {
+					// Ensure we store the Cloudinary secure URL and remove any local uri
+					item = { ...item, imageUrl: uploaded }
+					if ((item as any).imageUri) delete (item as any).imageUri
+					onProgress && onProgress('Image uploaded')
+				} else {
+					onProgress && onProgress('Image upload failed')
+				}
+			}
+		} catch (err) {
+			debug && console.log('updateItem image handling error', err)
+		}
+
+		// Finally update the document
 		await updateDoc(itemRef, item)
 	}
 
 	const deleteItem: MenuBackendType['deleteItem'] = async (menuId, itemId) => {
+		// Get the item document reference
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
+		let imageUrl: string | undefined = undefined
+		try {
+			// Get the item document itself
+			const { getDoc } = await import('firebase/firestore')
+			const itemDocSnap = await getDoc(itemRef)
+			if (itemDocSnap.exists()) {
+				imageUrl = itemDocSnap.data().imageUrl
+			}
+		} catch (err) {
+			debug && console.log('Error fetching item document for delete:', err)
+		}
+
+		// Delete image from Cloudinary if it is a Cloudinary URL
+		if (
+			imageUrl &&
+			typeof imageUrl === 'string' &&
+			imageUrl.startsWith('http')
+		) {
+			try {
+				// Extract public_id from Cloudinary URL
+				// Example: https://res.cloudinary.com/db6gcoyum/image/upload/v1234567890/filename.jpg
+				const matches = imageUrl.match(/\/upload\/.*\/(.*)\.[a-zA-Z]+$/)
+				const publicId = matches ? matches[1] : undefined
+				if (publicId) {
+					try {
+						const functions = await import('firebase/functions')
+						const { getFunctions, httpsCallable } = functions
+						const funcs = getFunctions()
+						const callable = httpsCallable(funcs, 'deleteCloudinaryAsset')
+						await callable({ publicId })
+					} catch (err) {
+						debug &&
+							console.log('Failed to call deleteCloudinaryAsset function', err)
+					}
+				}
+			} catch (err) {
+				debug && console.log('Failed to delete image from Cloudinary:', err)
+			}
+		}
 		await deleteDoc(itemRef)
 	}
 

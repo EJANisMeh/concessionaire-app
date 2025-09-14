@@ -9,9 +9,7 @@ import { Auth } from '../backend/AuthBackend'
 import { Menu } from '../backend/MenuBackend'
 // ...existing code...
 import { useMediaLibraryPermission } from '../hooks/useMediaLibraryPermission'
-
-// Permission utility is now imported from hooks/useMediaLibraryPermission
-
+// ...existing code...
 const GlobalContext = createContext<any>(null)
 
 export const GlobalProvider = ({ children }: { children: ReactNode }) => {

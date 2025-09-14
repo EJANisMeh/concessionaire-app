@@ -1,6 +1,6 @@
-// Simple Vercel / serverless endpoint to delete Cloudinary assets.
+// Simple Vercel / serverless endpoint to delete Cloudinary assets
 // Deploy this file to Vercel (create a new project from this repo or copy file)
-// and set the environment variable DELETE_ASSET_API_KEY to a long secret.
+// and set the environment variable DELETE_ASSET_API_KEY to a long secret
 
 const cloudinary = require('cloudinary').v2
 

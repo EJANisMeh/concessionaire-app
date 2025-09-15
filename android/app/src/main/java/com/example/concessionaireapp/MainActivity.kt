@@ -1,4 +1,4 @@
-package com.anonymous.concessionaireapp
+package com.example.concessionaireapp
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.concessionaireapp'
+    namespace 'com.example.concessionaireapp'
     defaultConfig {
-        applicationId 'com.anonymous.concessionaireapp'
+        applicationId 'com.example.concessionaireapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

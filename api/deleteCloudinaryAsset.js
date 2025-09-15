@@ -23,13 +23,30 @@ module.exports = async (req, res) => {
 	if (!publicId)
 		return res.status(400).json({ success: false, error: 'publicId required' })
 
+	// Optional lookup mode: if `lookup: true` is provided in the body, return
+	// Cloudinary resource metadata instead of destroying the asset. This is
+	// useful for debugging 'not found' responses.
+	const lookup = Boolean(req.body && req.body.lookup)
 	try {
-		const result = await cloudinary.uploader.destroy(publicId)
-		return res.status(200).json({ success: true, result })
+		if (lookup) {
+			try {
+				const info = await cloudinary.api.resource(publicId)
+				return res.status(200).json({ success: true, info })
+			} catch (infoErr) {
+				// cloudinary.api.resource throws when not found - return that info
+				console.error('Cloudinary resource lookup error', infoErr)
+				return res
+					.status(200)
+					.json({ success: true, result: 'not found', detail: String(infoErr) })
+			}
+		} else {
+			const result = await cloudinary.uploader.destroy(publicId)
+			return res.status(200).json({ success: true, result })
+		}
 	} catch (err) {
-		console.error('Cloudinary destroy error', err)
+		console.error('Cloudinary operation error', err)
 		return res
 			.status(500)
-			.json({ success: false, error: 'Failed to delete asset' })
+			.json({ success: false, error: 'Failed to operate on asset' })
 	}
 }

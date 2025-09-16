@@ -16,7 +16,14 @@ export default function MainTabNavigator() {
 				headerShown: false,
 				tabBarActiveTintColor: '#B71C1C', // Red for active
 				tabBarInactiveTintColor: '#fff',
-				tabBarStyle: { backgroundColor: '#222' },
+				// remove bottom safe area and force consistent height
+				safeAreaInsets: { bottom: 0 },
+				tabBarStyle: {
+					backgroundColor: '#222',
+					paddingBottom: 0,
+					height: 64,
+					borderTopWidth: 0,
+				},
 				tabBarIcon: ({ color, size }) => {
 					switch (route.name) {
 						case 'Orders':
@@ -64,22 +71,22 @@ export default function MainTabNavigator() {
 					}
 				},
 			})}>
-				<Tab.Screen
-					name="Orders"
-					component={OrdersScreen}
-				/>
-				<Tab.Screen
-					name="Concession"
-					component={ConcessionScreen}
-				/>
-				<Tab.Screen
-					name="ScanQR"
-					component={ScanQRScreen}
-				/>
-				<Tab.Screen
-					name="Graphs"
-					component={GraphsScreen}
-				/>
+			<Tab.Screen
+				name="Orders"
+				component={OrdersScreen}
+			/>
+			<Tab.Screen
+				name="Concession"
+				component={ConcessionScreen}
+			/>
+			<Tab.Screen
+				name="ScanQR"
+				component={ScanQRScreen}
+			/>
+			<Tab.Screen
+				name="Graphs"
+				component={GraphsScreen}
+			/>
 			<Tab.Screen
 				name="Profile"
 				component={ProfileScreen}

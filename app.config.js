@@ -26,6 +26,9 @@ export default ({ config }) => {
 				// Secret for authorizing requests to the HTTP fallback endpoint.
 				DELETE_ASSET_API_KEY: process.env.DELETE_ASSET_API_KEY || '',
 			},
+			eas: {
+				projectId: '081da849-1d13-44ed-ac0b-b278fcc2710f',
+			},
 		},
 	}
 }

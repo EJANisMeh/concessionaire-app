@@ -28,6 +28,13 @@ const LoginScreen: React.FC = ({ navigation }: any) => {
 			return
 		}
 
+		// Enforce role: only concessionaire users may log in here
+		if (result.user.role && result.user.role !== 'concessionaire') {
+			Alert.alert('Access denied', 'This app is for concessionaires only.')
+			setLoading(false)
+			return
+		}
+
 		if (!result.user.emailVerified) {
 			Alert.alert('Proceeding to email verification.')
 			navigation.navigate('EmailVerification')

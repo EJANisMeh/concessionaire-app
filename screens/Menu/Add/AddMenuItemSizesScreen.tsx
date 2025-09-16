@@ -1,11 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useMenuBackend } from '../../../context/GlobalContext'
 import {
 	View,
 	Text,
 	TextInput,
 	TouchableOpacity,
-	FlatList,
+	ScrollView,
 	StyleSheet,
 	KeyboardAvoidingView,
 	Platform,
@@ -16,6 +16,23 @@ const debug = false
 
 const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
 	const menuBackend = useMenuBackend()
+	const scrollRef = useRef<any>(null)
+	// store y positions for each size row inside the ScrollView content
+	const sizeRowYs = useRef<number[]>([])
+
+	const scrollToIndex = (index: number) => {
+		const y = sizeRowYs.current[index] ?? 0
+		const offset = Platform.OS === 'android' ? 140 : 20
+		// small guard: ensure scrollRef exists
+		try {
+			scrollRef.current?.scrollTo({
+				y: Math.max(0, y - offset),
+				animated: true,
+			})
+		} catch (err) {
+			// ignore
+		}
+	}
 
 	const handleAddSize = () => {
 		if (!menuBackend.size || !menuBackend.price) return
@@ -102,104 +119,130 @@ const AddMenuItemSizesScreen: React.FC = ({ navigation }: any) => {
 	})
 
 	return (
-		<View style={styles.container}>
-			<View>
-				<Text style={styles.title}>Add Sizes and Prices for</Text>
-				<Text style={styles.subtitle}>Sizes and Prices:</Text>
-			</View>
-			<View style={{ flex: 1 }}>
-				<FlatList
-					data={menuBackend.sizes}
-					keyExtractor={(_, idx) => idx.toString()}
-					keyboardShouldPersistTaps="handled"
-					renderItem={({ item, index }) => (
-						<View style={styles.sizeRow}>
-							<TextInput
-								style={styles.sizeInput}
-								value={item.size}
-								onChangeText={(text) => handleEditSize(index, 'size', text)}
-							/>
-							<TextInput
-								style={styles.priceInput}
-								value={item.price}
-								onChangeText={(text) => handleEditSize(index, 'price', text)}
-								keyboardType="numeric"
-							/>
-							<TouchableOpacity
-								style={styles.removeButton}
-								onPress={() => confirmRemoveSize(index)}>
-								<Text style={styles.removeButtonText}>⦻</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[
-									styles.moveButton,
-									index === 0 ? { opacity: 0.4 } : null,
-								]}
-								onPress={() => handleMoveUp(index)}
-								disabled={index === 0}>
-								<Text style={styles.moveButtonText}>↑</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[
-									styles.moveButton,
-									index === menuBackend.sizes.length - 1
-										? { opacity: 0.4 }
-										: null,
-								]}
-								onPress={() => handleMoveDown(index)}
-								disabled={index === menuBackend.sizes.length - 1}>
-								<Text style={styles.moveButtonText}>↓</Text>
-							</TouchableOpacity>
-						</View>
+		<KeyboardAvoidingView
+			style={{ flex: 1 }}
+			behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+			keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+			<ScrollView
+				ref={scrollRef}
+				contentContainerStyle={styles.container}
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+				removeClippedSubviews={false}>
+				<View>
+					<Text style={styles.title}>Add Sizes and Prices for</Text>
+					<Text style={styles.subtitle}>Sizes and Prices:</Text>
+				</View>
+
+				<View style={{ flex: 1, width: '100%' }}>
+					{menuBackend.sizes && menuBackend.sizes.length > 0 ? (
+						menuBackend.sizes.map((item: any, index: number) => (
+							<View
+								style={styles.sizeRow}
+								key={index.toString()}
+								onLayout={(e) => {
+									// record vertical position of this row inside content
+									sizeRowYs.current[index] = e.nativeEvent.layout.y
+								}}>
+								<TextInput
+									style={styles.sizeInput}
+									value={item.size}
+									onChangeText={(text) => handleEditSize(index, 'size', text)}
+									onFocus={() => scrollToIndex(index)}
+								/>
+								<TextInput
+									style={styles.priceInput}
+									value={item.price}
+									onChangeText={(text) => handleEditSize(index, 'price', text)}
+									keyboardType="numeric"
+									onFocus={() => scrollToIndex(index)}
+								/>
+								<TouchableOpacity
+									style={styles.removeButton}
+									onPress={() => confirmRemoveSize(index)}>
+									<Text style={styles.removeButtonText}>⦻</Text>
+								</TouchableOpacity>
+								<TouchableOpacity
+									style={[
+										styles.moveButton,
+										index === 0 ? { opacity: 0.4 } : null,
+									]}
+									onPress={() => handleMoveUp(index)}
+									disabled={index === 0}>
+									<Text style={styles.moveButtonText}>↑</Text>
+								</TouchableOpacity>
+								<TouchableOpacity
+									style={[
+										styles.moveButton,
+										index === menuBackend.sizes.length - 1
+											? { opacity: 0.4 }
+											: null,
+									]}
+									onPress={() => handleMoveDown(index)}
+									disabled={index === menuBackend.sizes.length - 1}>
+									<Text style={styles.moveButtonText}>↓</Text>
+								</TouchableOpacity>
+							</View>
+						))
+					) : (
+						<View style={{ height: 16 }} />
 					)}
-					ListEmptyComponent={<View style={{ height: 16 }} />}
-					style={{ flex: 1 }}
-				/>
-			</View>
-			<KeyboardAvoidingView
-				behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
-				<View style={styles.sizeRow}>
-					<TextInput
-						style={styles.sizeInput}
-						placeholder="Size"
-						value={menuBackend.size}
-						onChangeText={menuBackend.setSize}
-					/>
-					<TextInput
-						style={styles.priceInput}
-						placeholder="₱ Price"
-						value={menuBackend.price}
-						onChangeText={menuBackend.setPrice}
-						keyboardType="numeric"
-					/>
-					<TouchableOpacity
-						style={styles.addButton}
-						onPress={handleAddSize}>
-						<Text style={styles.addButtonText}>＋</Text>
-					</TouchableOpacity>
 				</View>
-				<View style={styles.bottomButtons}>
-					<TouchableOpacity
-						style={styles.backButton}
-						onPress={() => navigation.goBack()}>
-						<Text style={styles.buttonText}>Back</Text>
-					</TouchableOpacity>
-					<TouchableOpacity
-						style={[
-							styles.nextButton,
-							{
-								opacity:
-									menuBackend.sizes.length > 0 && !hasEmptyFields ? 1 : 0.5,
-							},
-						]}
-						onPress={handleNext}
-						disabled={menuBackend.sizes.length === 0 || hasEmptyFields}>
-						<Text style={styles.buttonText}>Next</Text>
-					</TouchableOpacity>
+
+				<View style={{ width: '100%' }}>
+					<View
+						style={styles.sizeRow}
+						onLayout={(e) => {
+							// make sure the add-row is tracked at the end
+							const idx = menuBackend.sizes.length
+							sizeRowYs.current[idx] = e.nativeEvent.layout.y
+						}}>
+						<TextInput
+							style={styles.sizeInput}
+							placeholder="Size"
+							value={menuBackend.size}
+							onChangeText={menuBackend.setSize}
+							onFocus={() => {
+								// scroll to bottom where the add controls live
+								scrollRef.current?.scrollToEnd({ animated: true })
+							}}
+						/>
+						<TextInput
+							style={styles.priceInput}
+							placeholder="₱ Price"
+							value={menuBackend.price}
+							onChangeText={menuBackend.setPrice}
+							keyboardType="numeric"
+							onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+						/>
+						<TouchableOpacity
+							style={styles.addButton}
+							onPress={handleAddSize}>
+							<Text style={styles.addButtonText}>＋</Text>
+						</TouchableOpacity>
+					</View>
+					<View style={styles.bottomButtons}>
+						<TouchableOpacity
+							style={styles.backButton}
+							onPress={() => navigation.goBack()}>
+							<Text style={styles.buttonText}>Back</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[
+								styles.nextButton,
+								{
+									opacity:
+										menuBackend.sizes.length > 0 && !hasEmptyFields ? 1 : 0.5,
+								},
+							]}
+							onPress={handleNext}
+							disabled={menuBackend.sizes.length === 0 || hasEmptyFields}>
+							<Text style={styles.buttonText}>Next</Text>
+						</TouchableOpacity>
+					</View>
 				</View>
-			</KeyboardAvoidingView>
-		</View>
+			</ScrollView>
+		</KeyboardAvoidingView>
 	)
 }
 

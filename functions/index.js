@@ -28,7 +28,11 @@ exports.deleteCloudinaryAsset = functions.https.onCall(
 		}
 
 		try {
-			const result = await cloudinary.uploader.destroy(publicId)
+			// Ask Cloudinary to invalidate cached copies as well
+			const result = await cloudinary.uploader.destroy(publicId, {
+				invalidate: true,
+			})
+			// result typically contains { result: 'ok' } or { result: 'not found' }
 			return { success: true, result }
 		} catch (err) {
 			console.error('Cloudinary destroy error', err)

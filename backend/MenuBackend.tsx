@@ -51,7 +51,7 @@ export interface MenuBackendType {
 		onProgress?: (msg: string) => void
 	) => Promise<void>
 	deleteItem: (menuId: string, itemId: string) => Promise<void>
-	getMenuId: (concessionId: string) => Promise<string | null>
+	getMenuId: (concessionId?: any) => Promise<string | null>
 	currentItemName: string
 	setCurrentItemName: (name: string) => void
 	currentItemImageUri: string | null
@@ -187,16 +187,34 @@ export const Menu = (): MenuBackendType => {
 			let lastErr: any = null
 			for (const region of regionsToTry) {
 				try {
+					if (debug)
+						console.log(
+							'[callDelete] Trying callable region:',
+							region || 'default'
+						)
 					const funcs = region
 						? getFunctions(undefined, region)
 						: getFunctions()
 					const callable = httpsCallable(funcs, 'deleteCloudinaryAsset')
 					await callable({ publicId })
+					if (debug)
+						console.log(
+							'[callDelete] Callable succeeded for region:',
+							region || 'default'
+						)
 					return
 				} catch (err) {
 					lastErr = err
+					// Provide better diagnostics without exposing secrets
 					const code = (err as any)?.code || (err as any)?.status
 					const message = (err as any)?.message || ''
+					if (debug)
+						console.log(
+							'[callDelete] Callable error for region:',
+							region || 'default',
+							{ code, message }
+						)
+					// If the callable returned not-found for this region, try the next one
 					if (typeof code === 'string' && code.includes('not-found')) continue
 					if (
 						typeof message === 'string' &&
@@ -208,7 +226,61 @@ export const Menu = (): MenuBackendType => {
 			}
 			throw lastErr
 		} catch (callableErr) {
-			// If callable also failed, surface the error to the caller
+			// If callable also failed, surface the error to the caller but attempt
+			// the HTTP fallback if configured (covers cases where callable fails
+			// in the client but the HTTP endpoint is available in config).
+			if (debug)
+				console.log('[callDelete] Callable overall failure:', callableErr)
+			const code =
+				(callableErr as any)?.code || (callableErr as any)?.status || null
+			const message = (callableErr as any)?.message || String(callableErr)
+			// If HTTP fallback is configured, try it as a last resort
+			if (DELETE_ASSET_ENDPOINT && DELETE_ASSET_API_KEY) {
+				if (debug)
+					console.log(
+						'[callDelete] Attempting HTTP fallback after callable failure'
+					)
+				try {
+					const res = await fetch(DELETE_ASSET_ENDPOINT, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'x-delete-api-key': DELETE_ASSET_API_KEY,
+						},
+						body: JSON.stringify({ publicId }),
+					})
+					const text = await res.text()
+					if (!res.ok) {
+						throw new Error(
+							`HTTP delete fallback (after callable failure) failed: ${res.status} ${text}`
+						)
+					}
+					try {
+						const parsed = JSON.parse(text)
+						if (debug)
+							console.log(
+								'[callDelete] HTTP fallback (after callable) response:',
+								parsed
+							)
+					} catch (e) {
+						if (debug)
+							console.log(
+								'[callDelete] HTTP fallback (after callable) response text:',
+								text
+							)
+					}
+					return
+				} catch (httpErr) {
+					if (debug)
+						console.log(
+							'[callDelete] HTTP fallback also failed after callable failure:',
+							httpErr
+						)
+					// Throw the original callable error to preserve the original failure context
+					throw callableErr
+				}
+			}
+			// No HTTP fallback available or it failed: rethrow the callable error
 			throw callableErr
 		}
 	}
@@ -281,11 +353,52 @@ export const Menu = (): MenuBackendType => {
 
 	const getMenuId: MenuBackendType['getMenuId'] = async (concessionId) => {
 		try {
+			// If no concessionId provided, there is no menu to look up
+			if (!concessionId) return null
+			// Normalize concessionId: it may be a DocumentReference, a path, or an id
+			let normalizedId = concessionId
+			try {
+				if (
+					concessionId &&
+					typeof concessionId === 'object' &&
+					(concessionId as any).id
+				)
+					normalizedId = (concessionId as any).id
+				else if (typeof concessionId === 'string' && concessionId.includes('/'))
+					normalizedId = (concessionId.split('/').pop() as string) || ''
+			} catch (e) {
+				// fallback to original
+			}
 			const menuRef = collection(db, 'menu')
-			const q = query(menuRef, where('concessionId', '==', concessionId))
-			const snapshot = await getDocs(q)
-			if (snapshot.empty) return null
-			return snapshot.docs[0].id
+			// Try several forms depending on how concessionId was stored in menu docs:
+			// 1) plain id string (e.g. 'xBJnkj...')
+			// 2) path string with or without leading slash (e.g. '/concessions/xBJnkj...' or 'concessions/xBJnkj...')
+			// 3) a Firestore DocumentReference to the concession document
+			const attempts: Array<any> = []
+			// 1: id as stored directly
+			attempts.push(normalizedId)
+			// 2: path forms
+			attempts.push(`/concessions/${normalizedId}`)
+			attempts.push(`concessions/${normalizedId}`)
+			// 3: document reference
+			try {
+				const concessionRef = doc(db, 'concessions', normalizedId)
+				attempts.push(concessionRef)
+			} catch (e) {
+				// ignore
+			}
+			for (const val of attempts) {
+				try {
+					const q = query(menuRef, where('concessionId', '==', val as any))
+					const snapshot = await getDocs(q)
+					if (!snapshot.empty) return snapshot.docs[0].id
+				} catch (e) {
+					// ignore and try next
+					if (debug) console.log('getMenuId attempt failed for', val, e)
+				}
+			}
+			// nothing matched
+			return null
 		} catch (err) {
 			debug && console.log('getMenuId debug: Error getting menuId:', err)
 			return null
@@ -307,11 +420,12 @@ export const Menu = (): MenuBackendType => {
 		debug && console.log('updateItem debug:', { menuId, itemId, item })
 		const itemRef = doc(db, 'menu', menuId, 'items', itemId)
 
-		// If a new local image URI was provided (not a cloud URL), try to delete
-		// the previous cloud image first, then upload the new image and update
-		// the document with the resulting secure URL.
+		// Flow: if the incoming image differs and is local, upload the new image
+		// first, then delete the old Cloudinary asset, and finally update Firestore
+		// with the new image URL/public id. If upload fails, abort the update so we
+		// don't change the DB prematurely.
+		let abortUpdate = false
 		try {
-			// Fetch existing item to get its current imageUrl
 			const { getDoc } = await import('firebase/firestore')
 			const snap = await getDoc(itemRef)
 			let currentImageUrl: string | undefined = undefined
@@ -321,92 +435,66 @@ export const Menu = (): MenuBackendType => {
 				currentImagePublicId = snap.data().imagePublicId
 			}
 
-			// Support either `imageUri` (local file) or a non-http `imageUrl` from
-			// the UI. If the incoming image is a local path, upload it and ensure
-			// the Firestore payload contains the resulting Cloudinary URL.
-			const incomingImageLocalPath =
-				(item && (item as any).imageUri) ||
-				(item &&
-					(item as any).imageUrl &&
-					typeof (item as any).imageUrl === 'string' &&
-					!(item as any).imageUrl.startsWith('http') &&
-					(item as any).imageUrl)
+			// Normalize incoming image reference
+			let incomingImage: string | undefined = undefined
+			if (item && (item as any).imageUri) incomingImage = (item as any).imageUri
+			else if (item && (item as any).imageUrl)
+				incomingImage = (item as any).imageUrl
 
-			if (incomingImageLocalPath) {
-				// Upload the new local image first. Only after a successful upload
-				// do we attempt to delete the previous Cloudinary asset. This
-				// prevents accidental data loss if the upload fails.
-				onProgress && onProgress('Uploading image to database...')
+			const incomingIsLocal =
+				incomingImage &&
+				typeof incomingImage === 'string' &&
+				!incomingImage.startsWith('http')
+
+			if (incomingIsLocal) {
+				// Upload new image first
+				onProgress && onProgress('Uploading new image to Cloudinary...')
 				const uploaded = await uploadImageToCloudinary(
-					incomingImageLocalPath,
+					incomingImage || null,
 					onProgress
 				)
-
-				if (uploaded) {
-					// Replace payload with new Cloudinary URL and store public id
-					item = {
-						...item,
-						imageUrl: uploaded.url,
-						...(uploaded.publicId ? { imagePublicId: uploaded.publicId } : {}),
-					}
-					if ((item as any).imageUri) delete (item as any).imageUri
-					onProgress && onProgress('Image uploaded')
-
-					// Now attempt to delete the previous cloud image if present
-					if (
-						currentImageUrl &&
-						typeof currentImageUrl === 'string' &&
-						currentImageUrl.startsWith('http')
-					) {
-						onProgress && onProgress('Deleting previous image from database...')
-						try {
-							const publicId = extractCloudinaryPublicId(currentImageUrl)
-							// prefer stored public id when available
-							const effectivePublicId = currentImagePublicId || publicId
-							if (effectivePublicId) {
-								try {
-									if (debug) {
-										console.log('[updateItem] Attempting delete with values:', {
-											currentImageUrl,
-											currentImagePublicId,
-											parsedPublicId: publicId,
-											effectivePublicId,
-										})
-									}
-									await callDeleteCloudinaryAsset(effectivePublicId)
-								} catch (err) {
-									// Treat 'not-found' as a non-fatal condition (asset already removed)
-									const s = String(err || '')
-									if (
-										s.toLowerCase().includes('not-found') ||
-										(err &&
-											((err as any).code === 'not-found' ||
-												(err as any).code === 'NOT_FOUND'))
-									) {
-										debug &&
-											console.log(
-												'Delete skipped: asset not found (already removed)'
-											)
-									} else {
-										debug && console.log('Delete attempt failed:', err)
-									}
-									// Don't block the save; continue regardless.
-								}
-							}
-						} catch (err) {
-							debug &&
-								console.log(
-									'Failed to delete previous image from Cloudinary',
-									err
-								)
-						}
-					}
-				} else {
+				if (!uploaded) {
 					onProgress && onProgress('Image upload failed')
+					abortUpdate = true
+					throw new Error('Image upload failed')
+				}
+				// Attach uploaded info to payload
+				item = {
+					...item,
+					imageUrl: uploaded.url,
+					...(uploaded.publicId ? { imagePublicId: uploaded.publicId } : {}),
+				}
+				if ((item as any).imageUri) delete (item as any).imageUri
+				onProgress && onProgress('Image uploaded')
+
+				// Now delete the previous asset if it exists
+				const existingPublicId =
+					currentImagePublicId || extractCloudinaryPublicId(currentImageUrl)
+				if (existingPublicId) {
+					try {
+						if (debug)
+							console.log('[updateItem] Deleting previous asset after upload', {
+								existingPublicId,
+								currentImageUrl,
+								currentImagePublicId,
+							})
+						await callDeleteCloudinaryAsset(existingPublicId)
+					} catch (err) {
+						// Non-fatal: log and continue, but include structured error fields
+						const code = (err as any)?.code || (err as any)?.status || null
+						const message = (err as any)?.message || String(err)
+						debug &&
+							console.log('[updateItem] Post-upload delete failed', {
+								code,
+								message,
+								err,
+							})
+					}
 				}
 			}
 		} catch (err) {
 			debug && console.log('updateItem image handling error', err)
+			if (abortUpdate) throw err
 		}
 
 		// Finally update the document
@@ -454,12 +542,23 @@ export const Menu = (): MenuBackendType => {
 					storedImagePublicId || extractCloudinaryPublicId(imageUrl)
 				if (publicId) {
 					try {
+						if (debug)
+							console.log('[deleteItem] Deleting Cloudinary asset for item', {
+								publicId,
+							})
 						await callDeleteCloudinaryAsset(publicId)
 					} catch (err) {
+						const code = (err as any)?.code || (err as any)?.status || null
+						const message = (err as any)?.message || String(err)
 						debug &&
 							console.log(
-								'Failed to delete Cloudinary asset for item delete:',
-								err
+								'[deleteItem] Failed to delete Cloudinary asset for item delete',
+								{
+									publicId,
+									code,
+									message,
+									err,
+								}
 							)
 					}
 				}

@@ -19,7 +19,8 @@ interface UserProfile {
 	passwordHash: string
 	newLogin: boolean
 	emailVerified: boolean
-	concessionId: string
+	concessionId?: string
+	role?: string
 }
 
 // Result structure for login attempts
@@ -115,8 +116,31 @@ export const Auth = (): AuthContextType => {
 
 			debugBool && console.log('Login Debug: Password verified')
 
+			// Normalize concessionId (users may store a DocumentReference or a path)
+			const normalizeConcessionId = (val: any): string | undefined => {
+				if (!val && val !== 0) return undefined
+				// Firestore DocumentReference (has id)
+				if (typeof val === 'object' && (val as any).id) return (val as any).id
+				// String path like '/concessions/<id>'
+				if (typeof val === 'string' && val.includes('/')) {
+					const parts = val.split('/')
+					return (parts[parts.length - 1] as string) || undefined
+				}
+				// Fallback: assume it's already an id string
+				return String(val)
+			}
+
+			const rawConcessionVal =
+				(userDocResult.userDoc.data() as any).concessionId ||
+				userData.concessionId
+			const normalizedConcessionId = normalizeConcessionId(rawConcessionVal)
+			const normalizedUser: UserProfile = {
+				...userData,
+				concessionId: normalizedConcessionId,
+				role: (userData as any).role,
+			}
 			// Successful login
-			setUser(userData)
+			setUser(normalizedUser)
 
 			if (!userData.emailVerified) {
 				debugBool &&
@@ -131,7 +155,7 @@ export const Auth = (): AuthContextType => {
 					)
 			}
 
-			return { success: true, user: userData }
+			return { success: true, user: normalizedUser }
 
 			// On error, clear user and set error message
 		} catch (err: any) {
@@ -176,7 +200,19 @@ export const Auth = (): AuthContextType => {
 			if (!newUserDoc) {
 				return { success: false, error: 'User somehow not found' }
 			}
-			const newUserData = newUserDoc.data() as UserProfile
+			const rawNewUserData = newUserDoc.data() as any
+			const normalizeConcessionId = (val: any): string => {
+				if (!val) return ''
+				if (typeof val === 'object' && val.id) return val.id
+				if (typeof val === 'string' && val.includes('/'))
+					return val.split('/').pop() || ''
+				return String(val)
+			}
+			const newUserData: UserProfile = {
+				...(rawNewUserData as UserProfile),
+				concessionId: normalizeConcessionId(rawNewUserData.concessionId),
+				role: rawNewUserData.role,
+			}
 
 			debugBool &&
 				console.log('Verify Email Debug: User record updated successfully')
@@ -213,7 +249,19 @@ export const Auth = (): AuthContextType => {
 			if (!updatedUserDoc) {
 				return { success: false, error: 'User not found after update' }
 			}
-			const updatedUserData = updatedUserDoc.data() as UserProfile
+			const rawUpdated = updatedUserDoc.data() as any
+			const normalizeConcessionId = (val: any): string => {
+				if (!val) return ''
+				if (typeof val === 'object' && val.id) return val.id
+				if (typeof val === 'string' && val.includes('/'))
+					return val.split('/').pop() || ''
+				return String(val)
+			}
+			const updatedUserData: UserProfile = {
+				...(rawUpdated as UserProfile),
+				concessionId: normalizeConcessionId(rawUpdated.concessionId),
+				role: rawUpdated.role,
+			}
 			setUser(updatedUserData)
 
 			return { success: true, user: updatedUserData }
@@ -238,7 +286,19 @@ export const Auth = (): AuthContextType => {
 				return { success: false, error: 'User not found' }
 			}
 
-			const userData = userDocResult.userDoc.data() as UserProfile
+			const raw = userDocResult.userDoc.data() as any
+			const normalizeConcessionId = (val: any): string => {
+				if (!val) return ''
+				if (typeof val === 'object' && val.id) return val.id
+				if (typeof val === 'string' && val.includes('/'))
+					return val.split('/').pop() || ''
+				return String(val)
+			}
+			const userData: UserProfile = {
+				...(raw as UserProfile),
+				concessionId: normalizeConcessionId(raw.concessionId),
+				role: raw.role,
+			}
 			setUser(userData)
 
 			// If email not verified, return error and user data

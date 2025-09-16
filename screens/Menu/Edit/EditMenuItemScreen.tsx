@@ -156,11 +156,11 @@ const EditMenuItemScreen: React.FC = ({ navigation, route }: any) => {
 		if (!it) return false
 		// image required
 		if (!it.imageUri && !it.imageUrl) return false
-		// require at least one row in sizes, variations, and addons
+		// require at least one size row; variations and addons are optional
 		const hasSizes = it.sizes && it.sizes.length > 0
 		const hasVariations = it.variations && it.variations.length > 0
 		const hasAddons = it.addons && it.addons.length > 0
-		if (!hasSizes || !hasVariations || !hasAddons) return false
+		if (!hasSizes) return false
 		// name
 		if (!it.name || String(it.name).trim().length === 0) return false
 		// sizes must have name and price
@@ -217,7 +217,7 @@ const EditMenuItemScreen: React.FC = ({ navigation, route }: any) => {
 			sizes: [],
 			variations: [],
 			addons: [],
-			optionsMissing: false,
+			// only sizes are required; variations/addons are optional
 			sizesMissing: false,
 			variationsMissing: false,
 			addonsMissing: false,
@@ -268,12 +268,8 @@ const EditMenuItemScreen: React.FC = ({ navigation, route }: any) => {
 		}
 		// options: require sizes or variations
 		const hasSizes = it.sizes && it.sizes.length > 0
-		const hasVariations = it.variations && it.variations.length > 0
-		const hasAddons = it.addons && it.addons.length > 0
+		// variations/addons are optional; only report sizesMissing when absent
 		if (!hasSizes) errors.sizesMissing = true
-		if (!hasVariations) errors.variationsMissing = true
-		if (!hasAddons) errors.addonsMissing = true
-		if (!hasSizes || !hasVariations || !hasAddons) errors.optionsMissing = true
 		return errors
 	}
 
@@ -863,28 +859,13 @@ const EditMenuItemScreen: React.FC = ({ navigation, route }: any) => {
 				</View>
 			)}
 			{/* Only show the global validation message when the item is actually invalid
-			   (missing image/fields/options). Don't show it when Save is disabled
-			   solely because there are no unsaved changes. */}
+			   (missing image/fields). Sizes are required; variations and addons are
+			   optional. Don't show the message when Save is disabled solely because
+			   there are no unsaved changes. */}
 			{!isItemValid(item) && !loading && (
 				<View style={{ marginTop: 12 }}>
-					{validation.optionsMissing ? (
-						<View>
-							{validation.sizesMissing && (
-								<Text style={{ color: '#f88' }}>
-									Please add at least one size.
-								</Text>
-							)}
-							{validation.variationsMissing && (
-								<Text style={{ color: '#f88' }}>
-									Please add at least one variation.
-								</Text>
-							)}
-							{validation.addonsMissing && (
-								<Text style={{ color: '#f88' }}>
-									Please add at least one addon.
-								</Text>
-							)}
-						</View>
+					{validation.sizesMissing ? (
+						<Text style={{ color: '#f88' }}>Please add at least one size.</Text>
 					) : (
 						<Text style={{ color: '#f88' }}>
 							Please fill out all the fields.

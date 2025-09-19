@@ -13,7 +13,7 @@ import {
 import { useAuthBackend, useMenuBackend } from '../../../context/GlobalContext'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { AppStackParamList } from '../../../navigation/AppStack'
-import { auth } from '@/firebase'
+// auth is initialized lazily via getAuthInstance() in firebase.ts when needed
 
 interface Addon {
 	name: string

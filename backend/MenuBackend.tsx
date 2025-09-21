@@ -102,238 +102,42 @@ export const Menu = (): MenuBackendType => {
 	// Media library permission hook
 	const { checkAndRequestPermission } = useMediaLibraryPermission()
 
-	// Helper to delete Cloudinary assets.
-	// Strategy:
-	// 1) Try Firebase callable (across common regions)
-	// 2) If not deployed or unavailable (e.g. Spark plan), fall back to an
-	//    authenticated HTTP endpoint (e.g. a Vercel serverless function) you
-	//    can deploy separately. This avoids requiring Blaze billing on Firebase.
+	// NOTE: Cloudinary helpers have been paused to avoid accidental network
+	// calls while the image-upload/delete feature is on hold. The original
+	// implementations (uploadImageToCloudinary, callDeleteCloudinaryAsset,
+	// and extractCloudinaryPublicId) were performing network operations.
 	//
-	// DELETE_ASSET_ENDPOINT and DELETE_ASSET_API_KEY are imported from
-	// `backend/config.ts` so they can be provided via Expo extras or
-	// environment variables at build time.
+	// To keep TypeScript happy and preserve the API surface for the rest of
+	// the codebase, we provide safe no-op stubs below. These stubs return the
+	// same shapes as the original functions but do not perform any network
+	// calls. Re-enable the original implementations when ready to resume the
+	// Cloudinary-backed workflow.
 
-	// Helper: extract Cloudinary public_id from a Cloudinary URL. Handles
-	// optional transformation segments (e.g. /w_200,h_200/), optional version
-	// segments (e.g. /v12345/), and nested folders. Returns decoded public_id
-	// or undefined if it cannot be parsed.
 	const extractCloudinaryPublicId = (
 		url: string | undefined
 	): string | undefined => {
-		if (!url) return undefined
-		try {
-			// Cloudinary URLs look like: .../upload/<transformations>/v12345/folder/name.jpg
-			// We want to skip any transformation segments between /upload/ and the
-			// optional /v<number>/, then capture the remainder up to the file
-			// extension or query string.
-			const m = url.match(
-				/\/upload\/(?:[^/]+\/)*?(?:v\d+\/)?(.+?)(?:\.[A-Za-z0-9]+)?(?:$|\?)/
-			)
-			if (!m || !m[1]) return undefined
-			return decodeURIComponent(m[1])
-		} catch (e) {
-			return undefined
-		}
+		// Return undefined for all inputs while Cloudinary integration is paused
+		return undefined
 	}
 
 	const callDeleteCloudinaryAsset = async (publicId: string) => {
-		// If an HTTP fallback endpoint is configured, prefer it. This avoids
-		// calling Firebase callables (which may not be deployed) and simplifies
-		// local development where the HTTP endpoint is available.
-		if (DELETE_ASSET_ENDPOINT && DELETE_ASSET_API_KEY) {
-			try {
-				if (debug) {
-					console.log('[callDelete] Using HTTP fallback', DELETE_ASSET_ENDPOINT)
-					console.log('[callDelete] Deleting publicId:', publicId)
-				}
-				const res = await fetch(DELETE_ASSET_ENDPOINT, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'x-delete-api-key': DELETE_ASSET_API_KEY,
-					},
-					body: JSON.stringify({ publicId }),
-				})
-				const text = await res.text()
-				if (!res.ok) {
-					// include body in the thrown error for better diagnostics
-					throw new Error(`HTTP delete fallback failed: ${res.status} ${text}`)
-				}
-				// If the endpoint returned OK but returned a JSON 'result' that indicates not found,
-				// surface it via a debug log so callers can see it.
-				try {
-					const parsed = JSON.parse(text)
-					if (debug) console.log('[callDelete] HTTP fallback response:', parsed)
-				} catch (e) {
-					if (debug)
-						console.log('[callDelete] HTTP fallback response text:', text)
-				}
-				return
-			} catch (httpErr) {
-				// If HTTP fallback fails for any reason, fall back to callable below
-				if (debug)
-					console.log(
-						'[callDelete] HTTP fallback failed, will try callable',
-						httpErr
-					)
-			}
-		}
-
-		// Try calling Firebase callable across common regions as a final attempt
-		try {
-			const functionsModule = await import('firebase/functions')
-			const { getFunctions, httpsCallable } = functionsModule
-			const regionsToTry = [undefined, 'us-central1', 'europe-west1']
-			let lastErr: any = null
-			for (const region of regionsToTry) {
-				try {
-					if (debug)
-						console.log(
-							'[callDelete] Trying callable region:',
-							region || 'default'
-						)
-					const funcs = region
-						? getFunctions(undefined, region)
-						: getFunctions()
-					const callable = httpsCallable(funcs, 'deleteCloudinaryAsset')
-					await callable({ publicId })
-					if (debug)
-						console.log(
-							'[callDelete] Callable succeeded for region:',
-							region || 'default'
-						)
-					return
-				} catch (err) {
-					lastErr = err
-					// Provide better diagnostics without exposing secrets
-					const code = (err as any)?.code || (err as any)?.status
-					const message = (err as any)?.message || ''
-					if (debug)
-						console.log(
-							'[callDelete] Callable error for region:',
-							region || 'default',
-							{ code, message }
-						)
-					// If the callable returned not-found for this region, try the next one
-					if (typeof code === 'string' && code.includes('not-found')) continue
-					if (
-						typeof message === 'string' &&
-						message.includes('Cloud Functions API has not been used')
-					)
-						continue
-					throw err
-				}
-			}
-			throw lastErr
-		} catch (callableErr) {
-			// If callable also failed, surface the error to the caller but attempt
-			// the HTTP fallback if configured (covers cases where callable fails
-			// in the client but the HTTP endpoint is available in config).
-			if (debug)
-				console.log('[callDelete] Callable overall failure:', callableErr)
-			const code =
-				(callableErr as any)?.code || (callableErr as any)?.status || null
-			const message = (callableErr as any)?.message || String(callableErr)
-			// If HTTP fallback is configured, try it as a last resort
-			if (DELETE_ASSET_ENDPOINT && DELETE_ASSET_API_KEY) {
-				if (debug)
-					console.log(
-						'[callDelete] Attempting HTTP fallback after callable failure'
-					)
-				try {
-					const res = await fetch(DELETE_ASSET_ENDPOINT, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-							'x-delete-api-key': DELETE_ASSET_API_KEY,
-						},
-						body: JSON.stringify({ publicId }),
-					})
-					const text = await res.text()
-					if (!res.ok) {
-						throw new Error(
-							`HTTP delete fallback (after callable failure) failed: ${res.status} ${text}`
-						)
-					}
-					try {
-						const parsed = JSON.parse(text)
-						if (debug)
-							console.log(
-								'[callDelete] HTTP fallback (after callable) response:',
-								parsed
-							)
-					} catch (e) {
-						if (debug)
-							console.log(
-								'[callDelete] HTTP fallback (after callable) response text:',
-								text
-							)
-					}
-					return
-				} catch (httpErr) {
-					if (debug)
-						console.log(
-							'[callDelete] HTTP fallback also failed after callable failure:',
-							httpErr
-						)
-					// Throw the original callable error to preserve the original failure context
-					throw callableErr
-				}
-			}
-			// No HTTP fallback available or it failed: rethrow the callable error
-			throw callableErr
-		}
+		// No-op: Cloudinary delete is disabled while the feature is paused.
+		if (debug)
+			console.log('[callDelete] Cloudinary delete skipped (paused)', publicId)
+		return
 	}
 
-	// Helper to upload image if needed
 	const uploadImageToCloudinary = async (
 		imageUri: string | null,
 		onProgress?: (msg: string) => void
 	): Promise<{ url: string; publicId?: string } | null> => {
-		debug && console.log('Saving image to database')
-		if (!imageUri) return null
-		// If the image is already a remote URL, attempt to extract its publicId
-		// and return it so callers can reuse the existing metadata without
-		// re-uploading.
-		if (imageUri.startsWith('http')) {
-			const existingPublicId = extractCloudinaryPublicId(imageUri)
-			return { url: imageUri, publicId: existingPublicId }
-		}
-		try {
-			onProgress && onProgress('Uploading image to database...')
-			const CLOUDINARY_URL =
-				'https://api.cloudinary.com/v1_1/db6gcoyum/image/upload'
-			const UPLOAD_PRESET = 'SCaFOMA-UB'
-			const formData = new FormData()
-			formData.append('file', {
-				uri: imageUri,
-				type: 'image/jpeg',
-				name: `menu-image-${Date.now()}.jpg`,
-			} as any)
-			formData.append('upload_preset', UPLOAD_PRESET)
-			const response = await fetch(CLOUDINARY_URL, {
-				method: 'POST',
-				body: formData,
-			})
-			const data = await response.json()
-			if (data && data.secure_url) {
-				onProgress && onProgress('Image uploaded!')
-				// data.public_id is provided by Cloudinary on upload
-				return {
-					url: data.secure_url as string,
-					publicId: data.public_id as string,
-				}
-			} else {
-				debug && console.log('Cloudinary upload error:', data)
-				onProgress && onProgress('Cloudinary upload error')
-				return null
-			}
-		} catch (err) {
-			debug &&
-				console.log('MenuBackend: Failed to upload image to Cloudinary', err)
-			onProgress && onProgress('Failed to upload image to Cloudinary')
-			return null
-		}
+		// Immediately return null to indicate no upload occurred. Callers
+		// should handle null by skipping image updates or by using local URIs.
+		if (debug)
+			onProgress && onProgress('Image upload skipped (Cloudinary paused)')
+		if (debug)
+			console.log('[uploadImageToCloudinary] Skipped for uri:', imageUri)
+		return null
 	}
 
 	const getItems: MenuBackendType['getItems'] = async (menuId) => {

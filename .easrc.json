@@ -1,0 +1,7 @@
+{
+	"cli": {
+		"version": ">= 12.0.0"
+	},
+	"projectId": "081da849-1d13-44ed-ac0b-b278fcc2710f",
+	"owner": "imejan"
+}
